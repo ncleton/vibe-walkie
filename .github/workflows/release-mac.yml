@@ -92,7 +92,7 @@ jobs:
           chmod 600 sparkle-private-key
           SparkleTools/bin/generate_appcast \
             --ed-key-file sparkle-private-key \
-            --download-url-prefix "https://github.com/ncleton-petitmaker/vibe-walkie/releases/download/$GITHUB_REF_NAME/" \
+            --download-url-prefix "https://github.com/ncleton/vibe-walkie/releases/download/$GITHUB_REF_NAME/" \
             updates
       - name: Publier GitHub Release
         env:
