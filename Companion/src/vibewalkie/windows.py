@@ -40,6 +40,8 @@ class WindowsDesktop:
             "GetUserObjectInformationW": ([W.HANDLE, C.c_int, W.LPVOID, W.DWORD, C.POINTER(W.DWORD)], W.BOOL),
             "SetThreadDpiAwarenessContext": ([C.c_void_p], C.c_void_p),
             "GetAsyncKeyState": ([C.c_int], C.c_short),
+            "GetClassNameW": ([W.HWND, W.LPWSTR, C.c_int], C.c_int),
+            "SendMessageTimeoutW": ([W.HWND, W.UINT, W.WPARAM, W.LPARAM, W.UINT, W.UINT, C.POINTER(C.c_size_t)], W.LPARAM),
         }
         for name, (args, result) in declarations.items():
             function = getattr(self.user, name)
@@ -149,7 +151,10 @@ class WindowsDesktop:
 
     def text_state(self, element):
         try:
-            pattern = element.GetCurrentPattern(10014).QueryInterface(self.uia_types.IUIAutomationTextPattern)
+            raw = element.GetCurrentPattern(10014)
+            if not raw:
+                return self.native_edit_state(element)
+            pattern = raw.QueryInterface(self.uia_types.IUIAutomationTextPattern)
             document = pattern.DocumentRange
             before = document.GetText(1000001)
             selected = pattern.GetSelection()
@@ -163,6 +168,36 @@ class WindowsDesktop:
             return before, start, end
         except self.comtypes.COMError as error:
             raise RemoteError("ax_not_settable", "The application does not expose its text selection through Windows UI Automation. Use the manual keyboard or a compatible editor.") from error
+
+    def native_edit_state(self, element):
+        """Standard Win32/WinForms Edit controls have a native selection contract."""
+        window = element.CurrentNativeWindowHandle
+        name = C.create_unicode_buffer(256)
+        self.user.GetClassNameW(window, name, len(name))
+        if name.value.casefold() != "edit" and not name.value.casefold().startswith("windowsforms10.edit."):
+            raise RemoteError("ax_not_settable", f"The focused control ({name.value or 'no native window'}) exposes neither UI Automation text selection nor the Win32 Edit contract. Select an editable text field or use the manual keyboard.")
+
+        def message(kind, wparam=0, lparam=0):
+            result = C.c_size_t()
+            if not self.user.SendMessageTimeoutW(window, kind, wparam, lparam, 0x23, 1000, C.byref(result)):
+                raise RemoteError("input_unavailable", "The Windows text field did not respond. Close any blocking dialog and use an application with the same privilege level as the companion.")
+            return result.value
+
+        length = message(0x000E)  # WM_GETTEXTLENGTH
+        if length > 1000000:
+            raise RemoteError("ax_not_settable", "The text field is too large to verify safely. Select a smaller editable field.")
+        buffer = C.create_unicode_buffer(length + 1)
+        message(0x000D, len(buffer), C.addressof(buffer))  # WM_GETTEXT
+        start, end = W.DWORD(), W.DWORD()
+        message(0x00B0, C.addressof(start), C.addressof(end))  # EM_GETSEL: marshalled by Windows
+        encoded = buffer.value.encode("utf-16-le")
+        try:
+            offsets = [len(encoded[:position * 2].decode("utf-16-le")) for position in (start.value, end.value)]
+        except UnicodeDecodeError as error:
+            raise RemoteError("target_changed", "The Windows selection divides a Unicode character. Move the cursor and retry.") from error
+        if end.value > len(encoded) // 2 or start.value > end.value:
+            raise RemoteError("target_changed", "The Windows text or selection changed while it was being read. Retry dictation.")
+        return buffer.value, *offsets
 
     def capture_target(self):
         element = self.focus()
