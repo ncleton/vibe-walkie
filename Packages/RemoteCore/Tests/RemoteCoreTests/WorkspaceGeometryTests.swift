@@ -15,7 +15,8 @@ struct WorkspaceGeometryTests {
     }
 
     @Test("Open workspace allocates half to the screen and half to controls", arguments: [
-        CGSize(width: 800, height: 650), CGSize(width: 650, height: 900)
+        CGSize(width: 800, height: 650), CGSize(width: 650, height: 900),
+        CGSize(width: 592, height: 820), CGSize(width: 540, height: 520)
     ])
     func expanded(size: CGSize) {
         let layout = WorkspaceGeometry(size: size, regularWidth: true)

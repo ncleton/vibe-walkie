@@ -12,7 +12,8 @@ final class WorkspaceViewTests: XCTestCase {
             ("closed-short", CGSize(width: 420, height: 620), .compact),
             ("closed-landscape", CGSize(width: 620, height: 420), .compact),
             ("open-landscape", CGSize(width: 900, height: 700), .regular),
-            ("open-portrait", CGSize(width: 700, height: 900), .regular)
+            ("open-portrait", CGSize(width: 700, height: 900), .regular),
+            ("open-narrow-portrait", CGSize(width: 620, height: 880), .regular)
         ]
         for (name, size, sizeClass) in sizes {
             let client = HostConnectionClient()

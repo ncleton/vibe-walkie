@@ -13,7 +13,12 @@ public struct WorkspaceGeometry: Equatable, Sendable {
             width: size.width.isFinite ? max(0, size.width) : 0,
             height: size.height.isFinite ? max(0, size.height) : 0
         ))
-        guard regularWidth, bounds.width >= 600, bounds.height >= 240 else {
+        // Reserve at least 320 points per side-by-side control panel. A narrow
+        // regular viewport can still use two vertical panels after safe-area
+        // and outer padding are deducted; 600 points is not a device contract.
+        let fitsSideBySide = bounds.width >= 656 && bounds.height >= 240
+        let fitsStacked = bounds.width >= 540 && bounds.height >= 520
+        guard regularWidth, fitsSideBySide || fitsStacked else {
             screen = .zero
             controls = bounds
             isExpanded = false
@@ -34,7 +39,7 @@ public struct WorkspaceGeometry: Equatable, Sendable {
             screen = CGRect(x: 0, y: 0, width: max(0, fold.minX - 8), height: bounds.height)
             controls = CGRect(x: fold.maxX + 8, y: 0,
                               width: max(0, bounds.width - fold.maxX - 8), height: bounds.height)
-        } else if bounds.width >= bounds.height {
+        } else if bounds.width >= bounds.height && fitsSideBySide {
             let half = max(0, (bounds.width - 16) / 2)
             screen = CGRect(x: 0, y: 0, width: half, height: bounds.height)
             controls = CGRect(x: half + 16, y: 0, width: half, height: bounds.height)
