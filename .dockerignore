@@ -1,0 +1,9 @@
+**
+!Companion/
+!Companion/**
+!ProtocolFixtures/
+!ProtocolFixtures/**
+**/__pycache__/
+**/*.egg-info/
+**/.pytest_cache/
+**/.venv/

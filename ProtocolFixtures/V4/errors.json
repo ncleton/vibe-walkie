@@ -1,1 +1,1 @@
-{"codes":["version_mismatch","unsupported_capability","input_unavailable","screen_unavailable","secure_target","target_lost","activation_denied","rate_limited"]}
+{"codes":["version_mismatch","unsupported_capability","input_unavailable","screen_unavailable","secure_target","target_lost","activation_denied","rate_limited","invalid_control_configuration"]}

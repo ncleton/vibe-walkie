@@ -2,7 +2,11 @@ import SwiftUI
 import RemoteCore
 
 private func hostSymbol(for platform: HostPlatform) -> String {
-    platform == .windows ? "pc" : "desktopcomputer"
+    switch platform {
+    case .macOS: "desktopcomputer"
+    case .windows: "pc"
+    case .linux: "server.rack"
+    }
 }
 
 /// Sélecteur court accessible depuis le bouton en haut à gauche de la

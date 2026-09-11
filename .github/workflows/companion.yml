@@ -1,0 +1,32 @@
+name: Windows and Linux companions
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Companion/**'
+      - 'ProtocolFixtures/**'
+      - '.github/workflows/companion.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  linux-desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f Companion/tests/Dockerfile -t vibewalkie-companion-test .
+      - run: docker run --rm --init vibewalkie-companion-test
+  windows-desktop:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install './Companion[test]'
+      - name: Require real interactive Win32 control
+        run: python -m pytest -v Companion/tests/test_protocol.py Companion/tests/test_windows_integration.py

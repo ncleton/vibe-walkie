@@ -10,6 +10,7 @@ import RemoteCore
 struct RemoteHomeView: View {
     @EnvironmentObject private var client: HostConnectionClient
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var dictation: DictationController
 
     @State private var showSwitcher = false
@@ -35,51 +36,27 @@ struct RemoteHomeView: View {
             Color.appBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                topRow
-
-                VStack(spacing: 12) {
-                    TrackpadView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay(alignment: .bottom) {
-                            statusStrip
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 8)
-                                .allowsHitTesting(false)
+                GeometryReader { proxy in
+                    let geometry = WorkspaceGeometry(
+                        size: proxy.size,
+                        regularWidth: horizontalSizeClass == .regular,
+                        division: RemoteWorkspaceRegions.division(in: proxy)
+                    )
+                    RemoteWorkspaceLayout(geometry: geometry) {
+                        RemoteWorkspaceScreen(enabled: geometry.isExpanded && !showScreen) {
+                            showScreen = true
                         }
-                        .overlay(alignment: .bottomTrailing) {
-                            if showKeyboard {
-                                Button {
-                                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                                        showKeyboard = false
-                                    }
-                                } label: {
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.remoteBlue)
-                                        .frame(width: 44, height: 44)
-                                        .background(Circle().fill(Color.controlSurface))
-                                        .overlay(Circle().stroke(.white.opacity(0.1), lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.trailing, 12)
-                                .padding(.bottom, 58)
-                                .transition(.scale.combined(with: .opacity))
-                                .accessibilityLabel("ios.close.keyboard.a7fb38b")
-                                .accessibilityHint("ios.restores.dictation.controls.13392f1")
-                            }
-                        }
+                        .opacity(geometry.isExpanded ? 1 : 0)
+                        .accessibilityHidden(!geometry.isExpanded)
+                        .allowsHitTesting(geometry.isExpanded)
+                        .clipped()
 
-                    if !showKeyboard {
-                        dictationBar
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        controlPanel
                     }
                 }
                 .padding(.horizontal, 14)
-                .padding(.top, 14)
+                .padding(.top, 8)
 
-                if showKeyboard {
-                    RemoteKeyboardView(presentation: .inline)
-                }
             }
         }
         .preferredColorScheme(.dark)
@@ -143,6 +120,82 @@ struct RemoteHomeView: View {
         .fullScreenCover(isPresented: $showScreen) {
             RemoteScreenView(dictation: dictation)
                 .environmentObject(client)
+        }
+    }
+
+    private var controlPanel: some View {
+        GeometryReader { proxy in
+            VStack(spacing: 8) {
+                topRow
+                    TrackpadView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(alignment: .bottom) {
+                            statusStrip
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 8)
+                                .allowsHitTesting(false)
+                        }
+                        .overlay(alignment: .bottomTrailing) {
+                            if showKeyboard {
+                                Button {
+                                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                                        showKeyboard = false
+                                    }
+                                } label: {
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Color.remoteBlue)
+                                        .frame(width: 44, height: 44)
+                                        .background(Circle().fill(Color.controlSurface))
+                                        .overlay(Circle().stroke(.white.opacity(0.1), lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.trailing, 12)
+                                .padding(.bottom, 58)
+                                .transition(.scale.combined(with: .opacity))
+                                .accessibilityLabel("ios.close.keyboard.a7fb38b")
+                                .accessibilityHint("ios.restores.dictation.controls.13392f1")
+                            }
+                        }
+
+                if !showKeyboard {
+                    if proxy.size.height < 440 {
+                        compactDictationBar
+                    } else {
+                        dictationBar
+                    }
+                }
+                if showKeyboard {
+                    RemoteKeyboardView(presentation: .inline)
+                }
+            }
+        }
+    }
+
+    /// The short outer display and a tabletop control pane keep every command
+    /// reachable without shrinking the trackpad to nothing.
+    private var compactDictationBar: some View {
+        HStack(spacing: 8) {
+            PTTButton(dictation: dictation)
+                .scaleEffect(0.68)
+                .frame(width: 94, height: 98)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 4), spacing: 4) {
+                ForEach(ControlZone.allCases, id: \.self) { zone in
+                    configuredButton(zone, style: .bottom)
+                }
+                globalPaletteButton
+            }
+        }
+        .padding(8)
+        .background(Color.controlSurface, in: RoundedRectangle(cornerRadius: 20))
+        .popover(isPresented: $showGlobalPalette) {
+            GlobalShortcutBubble(
+                buttons: client.controlConfiguration.availableGlobalButtons,
+                perform: { action in showGlobalPalette = false; perform(action) },
+                configure: { showGlobalPalette = false; showControlConfigurator = true },
+                close: { showGlobalPalette = false }
+            )
+            .presentationCompactAdaptation(.popover)
         }
     }
 
@@ -275,8 +328,7 @@ struct RemoteHomeView: View {
                 showSettings = true
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
         .background(Color.appChrome)
     }
 
@@ -389,7 +441,7 @@ struct RemoteHomeView: View {
             }
             .foregroundStyle(showGlobalPalette ? Color.remoteBlue : .white.opacity(0.92))
             .frame(maxWidth: .infinity)
-            .frame(height: 43)
+            .frame(height: 44)
             .background(
                 (showGlobalPalette ? Color.remoteBlue.opacity(0.18) : Color.white.opacity(0.075)),
                 in: RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -424,7 +476,7 @@ struct RemoteHomeView: View {
             }
             .foregroundStyle(.white.opacity(actionIsEmpty(configuration.action) ? 0.48 : 0.9))
             .frame(maxWidth: style == .bottom ? .infinity : nil)
-            .frame(width: style == .side ? 68 : nil, height: style == .side ? 55 : 43)
+            .frame(width: style == .side ? 68 : nil, height: style == .side ? 55 : 44)
             .background(Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: style == .side ? 16 : 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: style == .side ? 16 : 14, style: .continuous)

@@ -45,6 +45,7 @@ final class HostConnectionClient: ObservableObject {
         }
     }
 
+    private var screenStreamOwner: UUID?
     private var connection: NWConnection?
     private var browser: NWBrowser?
     private var framer = MessageFramer()
@@ -77,14 +78,22 @@ final class HostConnectionClient: ObservableObject {
 
     private var pendingReplies: [UUID: CheckedContinuation<RemoteEnvelope, Error>] = [:]
     private var pendingControlConfiguration: ControlConfiguration?
+    private var configurationStorageFailed = false
+    private let configurationStore = HostControlConfigurationStore(defaults: .standard)
 
     init() {
         let storedHosts = PairedHostStore.load()
         pairedHosts = storedHosts.macs
         selectedHostID = storedHosts.selectedHostID
         nomadEndpoint = NomadFeatureFlag.isEnabled ? storedHosts.selectedHost?.nomadEndpoint : nil
-        controlConfiguration = Self.loadControlConfiguration()
-        pendingControlConfiguration = Self.loadPendingControlConfiguration()
+        controlConfiguration = .standard
+        do {
+            try configurationStore.migrateLegacy(selectedHostID: storedHosts.selectedHostID)
+            try loadHostConfiguration()
+        } catch {
+            configurationStorageFailed = true
+            state = .failed(.invalidControlConfiguration)
+        }
     }
 
 #if DEBUG
@@ -211,6 +220,10 @@ final class HostConnectionClient: ObservableObject {
     // MARK: - Connexion
 
     func connectIfPossible() {
+        guard !configurationStorageFailed else {
+            state = .failed(.invalidControlConfiguration)
+            return
+        }
         guard let mac = pairedHost, connection == nil else { return }
         state = .searching
         browseForPairedHost(mac)
@@ -829,14 +842,6 @@ final class HostConnectionClient: ObservableObject {
             pairingTimeoutTask = nil
             startWatchdog()
 
-            if let pendingControlConfiguration {
-                sendFireAndForget(
-                    type: .controlConfigurationUpdate,
-                    payload: ControlConfigurationPayload(configuration: pendingControlConfiguration)
-                )
-            } else {
-                sendFireAndForget(type: .controlConfigurationRequest, payload: EmptyPayload())
-            }
 
             let advertisedNomadEndpoint = NomadFeatureFlag.isEnabled && payload.nomadEndpoint?.isValid == true
                 ? payload.nomadEndpoint
@@ -865,6 +870,16 @@ final class HostConnectionClient: ObservableObject {
                     apply(PairedHostStore.upsert(refreshed, select: false))
                 }
                 nomadEndpoint = refreshed.nomadEndpoint
+            }
+
+            guard !configurationStorageFailed else { return }
+            if let pendingControlConfiguration {
+                sendFireAndForget(
+                    type: .controlConfigurationUpdate,
+                    payload: ControlConfigurationPayload(configuration: pendingControlConfiguration)
+                )
+            } else {
+                sendFireAndForget(type: .controlConfigurationRequest, payload: EmptyPayload())
             }
 
             // L'écoute Bonjour reste active pendant une session Nomade. Elle
@@ -907,7 +922,7 @@ final class HostConnectionClient: ObservableObject {
             }
             controlConfiguration = payload.configuration
             pendingControlConfiguration = nil
-            Self.persistControlConfiguration(payload.configuration, pending: false)
+            persistControlConfiguration(payload.configuration, pending: false)
 
         case .error:
             if let payload = try? envelope.decodePayload(RemoteErrorPayload.self) {
@@ -925,9 +940,25 @@ final class HostConnectionClient: ObservableObject {
     }
 
     private func apply(_ storedHosts: PairedHostStore.State) {
+        let previousHostID = selectedHostID
         pairedHosts = storedHosts.macs
         selectedHostID = storedHosts.selectedHostID
         nomadEndpoint = NomadFeatureFlag.isEnabled ? storedHosts.selectedHost?.nomadEndpoint : nil
+        if previousHostID != selectedHostID {
+            controlConfiguration = .standard
+            pendingControlConfiguration = nil
+            do { try loadHostConfiguration() } catch {
+                configurationStorageFailed = true
+                state = .failed(.invalidControlConfiguration)
+            }
+        }
+    }
+
+    private func loadHostConfiguration() throws {
+        let stored = try configurationStore.load(hostID: selectedHostID)
+        controlConfiguration = stored.configuration
+        pendingControlConfiguration = stored.pending
+        configurationStorageFailed = false
     }
 
     private func resetTargetState() {
@@ -942,7 +973,8 @@ final class HostConnectionClient: ObservableObject {
         connectionRoute = .local
     }
 
-    func startScreenStream(maxWidth: Int = 1_280, framesPerSecond: Int = 10, jpegQuality: Double = 0.45) {
+    func startScreenStream(maxWidth: Int = 1_280, framesPerSecond: Int = 10, jpegQuality: Double = 0.45, owner: UUID? = nil) {
+        screenStreamOwner = owner
         latestScreenFrame = nil
         lastScreenFrameAt = nil
         screenStreamStatus = ScreenStreamStatusPayload(isStreaming: false, permissionGranted: true)
@@ -957,11 +989,23 @@ final class HostConnectionClient: ObservableObject {
         )
     }
 
-    func stopScreenStream() {
+    func stopScreenStream(owner: UUID? = nil) {
+        guard owner == nil || owner == screenStreamOwner else { return }
+        screenStreamOwner = nil
         sendFireAndForget(type: .screenStreamRequest, payload: ScreenStreamRequestPayload(enabled: false))
         latestScreenFrame = nil
         lastScreenFrameAt = nil
         screenStreamStatus = ScreenStreamStatusPayload(isStreaming: false, permissionGranted: true)
+    }
+
+    func reportStaleScreenStream(owner: UUID) {
+        guard screenStreamOwner == owner else { return }
+        stopScreenStream(owner: owner)
+        screenStreamStatus = ScreenStreamStatusPayload(
+            isStreaming: false,
+            permissionGranted: true,
+            detail: AppL10n.text("ios.workspace.screen.stale")
+        )
     }
 
     // MARK: - Bloc de commandes
@@ -971,7 +1015,7 @@ final class HostConnectionClient: ObservableObject {
         local.updatedAt = Date()
         controlConfiguration = local
         pendingControlConfiguration = local
-        Self.persistControlConfiguration(local, pending: true)
+        persistControlConfiguration(local, pending: true)
 
         guard state.isReady else { return }
         sendFireAndForget(
@@ -981,32 +1025,19 @@ final class HostConnectionClient: ObservableObject {
     }
 
     func resetControlConfiguration() {
+        let wasStorageFailed = configurationStorageFailed
         updateControlConfiguration(.standard)
+        if wasStorageFailed && !configurationStorageFailed { reconnectNow() }
     }
 
-    private static let controlConfigurationDefaultsKey = "controlConfiguration.v1"
-    private static let pendingControlConfigurationDefaultsKey = "controlConfiguration.pending.v1"
-
-    private static func loadControlConfiguration() -> ControlConfiguration {
-        guard let data = UserDefaults.standard.data(forKey: controlConfigurationDefaultsKey),
-              let configuration = try? RemoteCoding.decoder.decode(ControlConfiguration.self, from: data) else {
-            return .standard
-        }
-        return configuration
-    }
-
-    private static func loadPendingControlConfiguration() -> ControlConfiguration? {
-        guard let data = UserDefaults.standard.data(forKey: pendingControlConfigurationDefaultsKey) else { return nil }
-        return try? RemoteCoding.decoder.decode(ControlConfiguration.self, from: data)
-    }
-
-    private static func persistControlConfiguration(_ configuration: ControlConfiguration, pending: Bool) {
-        guard let data = try? RemoteCoding.encoder.encode(configuration) else { return }
-        UserDefaults.standard.set(data, forKey: controlConfigurationDefaultsKey)
-        if pending {
-            UserDefaults.standard.set(data, forKey: pendingControlConfigurationDefaultsKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: pendingControlConfigurationDefaultsKey)
+    private func persistControlConfiguration(_ configuration: ControlConfiguration, pending: Bool) {
+        guard let selectedHostID else { return }
+        do {
+            try configurationStore.save(configuration, hostID: selectedHostID, pending: pending)
+            configurationStorageFailed = false
+        } catch {
+            configurationStorageFailed = true
+            state = .failed(.invalidControlConfiguration)
         }
     }
 

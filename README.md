@@ -31,6 +31,11 @@ Vibe Walkie turns your iPhone into a remote control for Mac: on-device dictation
 
 ## What's new
 
+The next version is being developed for **iPhone Duo, Windows and Linux/VPS**.
+See the [source-backed research and validation requirements](Documentation/NEXT_VERSION_RESEARCH.md)
+and the [Windows/Linux companion installation guide](Companion/README.md).
+Native Duo and Windows validation are tracked separately from the existing Mac release.
+
 - **Multi-Mac** — pair several Macs with one iPhone and switch machines from the top-left button.
 - **Roaming mode** — reach your Mac remotely through Tailscale, with automatic fallback to the local network whenever it is available.
 - **Customizable controls** — arrange quick keys, labels and icons around the way you work.
@@ -107,7 +112,7 @@ The repository contains the iOS app, macOS companion, shared `RemoteCore` protoc
 - iPhone and Mac on the same local network for standard operation;
 - for Roaming mode: Tailscale installed separately on both devices, with access to the same tailnet or to a shared Mac.
 
-The current protocol is **version 3**. Older versions are intentionally incompatible: update both apps together.
+The source protocol is **version 4**. Older versions are intentionally incompatible: update both apps together.
 
 ## Build the project
 

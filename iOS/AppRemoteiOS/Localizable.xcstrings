@@ -6,7 +6,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accessibility is disabled on the Mac"
+            "value": "Accessibility is disabled on the computer"
           }
         },
         "de": {
@@ -204,7 +204,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accessibilité désactivée sur le Mac"
+            "value": "Accessibilité désactivée sur l’ordinateur"
           }
         }
       }
@@ -630,7 +630,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add a Mac"
+            "value": "Add a computer"
           }
         },
         "de": {
@@ -828,7 +828,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajouter un Mac"
+            "value": "Ajouter un ordinateur"
           }
         }
       }
@@ -838,7 +838,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add your Mac"
+            "value": "Add your computer"
           }
         },
         "de": {
@@ -1036,7 +1036,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuez sur votre Mac"
+            "value": "Continuez sur votre ordinateur"
           }
         }
       }
@@ -1046,7 +1046,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow Accessibility access for Vibe Walkie on the Mac."
+            "value": "Allow Accessibility access for Vibe Walkie on the computer."
           }
         },
         "de": {
@@ -1244,7 +1244,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autorisez l'Accessibilité pour Vibe Walkie sur le Mac."
+            "value": "Autorisez l'Accessibilité pour Vibe Walkie sur l’ordinateur."
           }
         }
       }
@@ -1254,7 +1254,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow screen access on the Mac"
+            "value": "Allow screen access on the computer"
           }
         },
         "de": {
@@ -1452,7 +1452,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autoriser l’accès à l’écran sur le Mac"
+            "value": "Autoriser l’accès à l’écran sur l’ordinateur"
           }
         }
       }
@@ -1462,7 +1462,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow %1$@ on the Mac · %2$@"
+            "value": "Allow %1$@ on the computer · %2$@"
           }
         },
         "de": {
@@ -1660,7 +1660,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autoriser %1$@ sur le Mac · %2$@"
+            "value": "Autoriser %1$@ sur l’ordinateur · %2$@"
           }
         }
       }
@@ -3750,13 +3750,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changes will be sent to the Mac the next time it connects."
+            "value": "Changes will be sent to the computer the next time it connects."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les changements seront envoyés au Mac à la prochaine connexion."
+            "value": "Les changements seront envoyés à l’ordinateur à la prochaine connexion."
           }
         },
         "ar": {
@@ -3958,13 +3958,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changes are synced with this Mac."
+            "value": "Changes are synced with this computer."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les changements sont synchronisés avec ce Mac."
+            "value": "Les changements sont synchronisés avec cet ordinateur."
           }
         },
         "ar": {
@@ -4166,7 +4166,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Check that the Mac displays"
+            "value": "Check that the computer displays"
           }
         },
         "de": {
@@ -4364,7 +4364,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vérifiez que le Mac affiche"
+            "value": "Vérifiez que l’ordinateur affiche"
           }
         }
       }
@@ -4582,7 +4582,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose a Mac"
+            "value": "Choose a computer"
           }
         },
         "de": {
@@ -4780,7 +4780,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisir un Mac"
+            "value": "Choisir un ordinateur"
           }
         }
       }
@@ -4998,7 +4998,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Click a text field on the Mac first."
+            "value": "Click a text field on the computer first."
           }
         },
         "de": {
@@ -5196,7 +5196,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cliquez d'abord dans un champ de texte sur le Mac."
+            "value": "Cliquez d'abord dans un champ de texte sur l’ordinateur."
           }
         }
       }
@@ -7078,7 +7078,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connecting to the Mac screen…"
+            "value": "Connecting to the computer screen…"
           }
         },
         "de": {
@@ -7276,7 +7276,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connexion à l’écran du Mac…"
+            "value": "Connexion à l’écran de l’ordinateur…"
           }
         }
       }
@@ -7900,7 +7900,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sur votre Mac, ouvrez votre navigateur et tapez :"
+            "value": "Sur votre ordinateur, ouvrez votre navigateur et tapez :"
           }
         }
       }
@@ -8326,7 +8326,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Could not load apps from the Mac."
+            "value": "Could not load apps from the computer."
           }
         },
         "de": {
@@ -8524,7 +8524,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de charger les applications du Mac."
+            "value": "Impossible de charger les applications de l’ordinateur."
           }
         }
       }
@@ -11654,7 +11654,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Download Mac companion"
+            "value": "Download computer companion"
           }
         },
         "de": {
@@ -11852,7 +11852,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Télécharger le compagnon Mac"
+            "value": "Télécharger le compagnon ordinateur"
           }
         }
       }
@@ -12070,7 +12070,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Draft to send to the Mac"
+            "value": "Draft to send to the computer"
           }
         },
         "de": {
@@ -12268,7 +12268,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Brouillon à envoyer au Mac"
+            "value": "Brouillon à envoyer à l’ordinateur"
           }
         }
       }
@@ -13942,7 +13942,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Explore without a Mac"
+            "value": "Explore without a computer"
           }
         },
         "de": {
@@ -14140,7 +14140,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Découvrir sans Mac"
+            "value": "Découvrir sans ordinateur"
           }
         }
       }
@@ -14358,7 +14358,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Forget selected Mac"
+            "value": "Forget selected computer"
           }
         },
         "de": {
@@ -14556,7 +14556,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oublier le Mac sélectionné"
+            "value": "Oublier l’ordinateur sélectionné"
           }
         }
       }
@@ -15606,7 +15606,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hold to dictate, release to insert on the Mac."
+            "value": "Hold to dictate, release to insert on the computer."
           }
         },
         "de": {
@@ -15804,7 +15804,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maintenez pour dicter, relâchez pour insérer sur le Mac."
+            "value": "Maintenez pour dicter, relâchez pour insérer sur l’ordinateur."
           }
         }
       }
@@ -16854,7 +16854,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Install Mac companion"
+            "value": "Install computer companion"
           }
         },
         "de": {
@@ -17052,7 +17052,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installer le compagnon Mac"
+            "value": "Installer le compagnon ordinateur"
           }
         }
       }
@@ -17270,7 +17270,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Internal Mac companion error."
+            "value": "Internal computer companion error."
           }
         },
         "de": {
@@ -17468,7 +17468,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erreur interne du compagnon Mac."
+            "value": "Erreur interne du compagnon ordinateur."
           }
         }
       }
@@ -19974,7 +19974,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac not found. Check Wi-Fi, Tailscale, and that the companion is open."
+            "value": "Computer not found. Check Wi-Fi, Tailscale, and that the companion is open."
           }
         },
         "de": {
@@ -20172,7 +20172,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac introuvable. Vérifiez le Wi‑Fi, Tailscale et que le compagnon est ouvert."
+            "value": "Ordinateur introuvable. Vérifiez le Wi‑Fi, Tailscale et que le compagnon est ouvert."
           }
         }
       }
@@ -20182,7 +20182,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac shortcuts"
+            "value": "Computer shortcuts"
           }
         },
         "de": {
@@ -20380,7 +20380,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Raccourcis Mac"
+            "value": "Raccourcis ordinateur"
           }
         }
       }
@@ -20390,7 +20390,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac unreachable"
+            "value": "Computer unreachable"
           }
         },
         "de": {
@@ -20588,7 +20588,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac inaccessible"
+            "value": "Ordinateur inaccessible"
           }
         }
       }
@@ -21638,7 +21638,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "My Macs"
+            "value": "My computers"
           }
         },
         "de": {
@@ -21836,7 +21836,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mes Macs"
+            "value": "Mes ordinateurs"
           }
         }
       }
@@ -22262,7 +22262,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No active text field on the Mac"
+            "value": "No active text field on the computer"
           }
         },
         "de": {
@@ -22460,7 +22460,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun champ actif sur le Mac"
+            "value": "Aucun champ actif sur l’ordinateur"
           }
         }
       }
@@ -22470,7 +22470,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No Mac"
+            "value": "No computer"
           }
         },
         "de": {
@@ -22668,7 +22668,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun Mac"
+            "value": "Aucun ordinateur"
           }
         }
       }
@@ -22886,7 +22886,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No paired Mac"
+            "value": "No paired computer"
           }
         },
         "de": {
@@ -23084,7 +23084,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun Mac appairé"
+            "value": "Aucun ordinateur appairé"
           }
         }
       }
@@ -24134,7 +24134,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On iPhone, you can assign standard keys. To record any combination—such as ⌘⇧K—open Vibe Walkie settings on the Mac."
+            "value": "Assign standard keys on iPhone. Register custom keyboard combinations in the companion on the selected computer."
           }
         },
         "de": {
@@ -24332,7 +24332,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sur l’iPhone, vous pouvez affecter les touches standard. Pour enregistrer n’importe quelle combinaison — par exemple ⌘⇧K — ouvrez les réglages de Vibe Walkie sur le Mac."
+            "value": "Assignez les touches standard sur l’iPhone. Enregistrez les combinaisons personnalisées dans le compagnon de l’ordinateur sélectionné."
           }
         }
       }
@@ -24966,7 +24966,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open Vibe Walkie on your Mac, then choose “Pair an iPhone.”"
+            "value": "Open the companion on your computer and generate a pairing QR code."
           }
         },
         "de": {
@@ -25164,7 +25164,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvrez Vibe Walkie sur votre Mac, puis « Appairer un iPhone »."
+            "value": "Ouvrez le compagnon sur votre ordinateur et générez un QR d’appairage."
           }
         }
       }
@@ -25174,7 +25174,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pair a Mac"
+            "value": "Pair a computer"
           }
         },
         "de": {
@@ -25372,7 +25372,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appairer un Mac"
+            "value": "Appairer un ordinateur"
           }
         }
       }
@@ -26006,7 +26006,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pairing confirmed on the Mac"
+            "value": "Pairing confirmed on the computer"
           }
         },
         "de": {
@@ -26204,7 +26204,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appairage confirmé sur le Mac"
+            "value": "Appairage confirmé sur l’ordinateur"
           }
         }
       }
@@ -26214,7 +26214,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pairing was denied on the Mac."
+            "value": "Pairing was denied on the computer."
           }
         },
         "de": {
@@ -26412,7 +26412,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L'appairage a été refusé sur le Mac."
+            "value": "L'appairage a été refusé sur l’ordinateur."
           }
         }
       }
@@ -31414,7 +31414,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scan the code shown by Vibe Walkie on your Mac."
+            "value": "Scan the code shown by Vibe Walkie on your computer."
           }
         },
         "de": {
@@ -31612,7 +31612,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scannez le code affiché par Vibe Walkie sur votre Mac."
+            "value": "Scannez le code affiché par Vibe Walkie sur votre ordinateur."
           }
         }
       }
@@ -32038,7 +32038,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Screen view stays encrypted between iPhone and Mac and adapts to network quality. The PTT button is on the right by default and can be moved to the left."
+            "value": "Screen view stays encrypted between iPhone and computer and adapts to network quality. The PTT button is on the right by default and can be moved to the left."
           }
         },
         "de": {
@@ -32236,7 +32236,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le retour écran reste chiffré entre l’iPhone et le Mac et sa qualité s’adapte au réseau. Le bouton PTT est placé à droite par défaut et peut être déplacé à gauche."
+            "value": "Le retour écran reste chiffré entre l’iPhone et l’ordinateur et sa qualité s’adapte au réseau. Le bouton PTT est placé à droite par défaut et peut être déplacé à gauche."
           }
         }
       }
@@ -32662,7 +32662,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Searching for Mac…"
+            "value": "Searching for computer…"
           }
         },
         "de": {
@@ -32860,7 +32860,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recherche du Mac…"
+            "value": "Recherche de l’ordinateur…"
           }
         }
       }
@@ -32870,7 +32870,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Securing connection to the Mac…"
+            "value": "Securing connection to the computer…"
           }
         },
         "de": {
@@ -33068,7 +33068,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connexion sécurisée au Mac…"
+            "value": "Connexion sécurisée à l’ordinateur…"
           }
         }
       }
@@ -34118,7 +34118,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Shortcut saved on the Mac"
+            "value": "Shortcut saved on the computer"
           }
         },
         "de": {
@@ -34316,7 +34316,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Raccourci enregistré sur le Mac"
+            "value": "Raccourci enregistré sur l’ordinateur"
           }
         }
       }
@@ -35574,7 +35574,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Switch Mac"
+            "value": "Switch computer"
           }
         },
         "de": {
@@ -35772,7 +35772,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changer de Mac"
+            "value": "Changer de ordinateur"
           }
         }
       }
@@ -36406,7 +36406,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap a Mac to switch the remote. Each companion must be paired once."
+            "value": "Tap a computer to switch the remote. Each companion must be paired once."
           }
         },
         "de": {
@@ -36604,7 +36604,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez un Mac pour basculer la télécommande. Chaque compagnon doit être appairé une fois."
+            "value": "Touchez un ordinateur pour basculer la télécommande. Chaque compagnon doit être appairé une fois."
           }
         }
       }
@@ -37238,7 +37238,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Text sent to the Mac."
+            "value": "Text sent to the computer."
           }
         },
         "de": {
@@ -37436,7 +37436,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Texte envoyé au Mac."
+            "value": "Texte envoyé à l’ordinateur."
           }
         }
       }
@@ -38486,7 +38486,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The connection remains direct to the Mac. No account, Tailscale token, or persistent secret is sent to Vibe Walkie."
+            "value": "The connection remains direct to the computer. No account, Tailscale token, or persistent secret is sent to Vibe Walkie."
           }
         },
         "de": {
@@ -38684,7 +38684,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La connexion reste directe vers le Mac. Aucun compte, jeton Tailscale ou secret durable n’est transmis à Vibe Walkie."
+            "value": "La connexion reste directe vers l’ordinateur. Aucun compte, jeton Tailscale ou secret durable n’est transmis à Vibe Walkie."
           }
         }
       }
@@ -39110,7 +39110,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The remote controls one Mac at a time."
+            "value": "The remote controls one computer at a time."
           }
         },
         "de": {
@@ -39308,7 +39308,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La télécommande ne contrôle qu’un Mac à la fois."
+            "value": "La télécommande ne contrôle qu’un ordinateur à la fois."
           }
         }
       }
@@ -39526,7 +39526,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The text was not sent to the Mac."
+            "value": "The text was not sent to the computer."
           }
         },
         "de": {
@@ -39724,7 +39724,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le texte n'a pas été envoyé au Mac."
+            "value": "Le texte n'a pas été envoyé à l’ordinateur."
           }
         }
       }
@@ -39942,7 +39942,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The Vibe Walkie versions do not match. Update the iPhone and Mac."
+            "value": "The Vibe Walkie versions do not match. Update the iPhone and computer."
           }
         },
         "de": {
@@ -40140,7 +40140,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les versions de Vibe Walkie diffèrent. Mettez à jour l'iPhone et le Mac."
+            "value": "Les versions de Vibe Walkie diffèrent. Mettez à jour l'iPhone et l’ordinateur."
           }
         }
       }
@@ -40774,7 +40774,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This hardware shortcut can be replaced from the Mac."
+            "value": "This hardware shortcut can be replaced from the computer."
           }
         },
         "de": {
@@ -40972,7 +40972,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce raccourci matériel peut être remplacé depuis le Mac."
+            "value": "Ce raccourci matériel peut être remplacé depuis l’ordinateur."
           }
         }
       }
@@ -41398,7 +41398,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This tour is read-only. No command is sent and no Mac is shown as connected."
+            "value": "This tour is read-only. No command is sent and no computer is shown as connected."
           }
         },
         "de": {
@@ -41596,7 +41596,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette visite est en lecture seule. Aucune commande n’est envoyée et aucun Mac n’est simulé comme connecté."
+            "value": "Cette visite est en lecture seule. Aucune commande n’est envoyée et aucun ordinateur n’est simulé comme connecté."
           }
         }
       }
@@ -41606,7 +41606,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This window is on another desktop. Open it once on the Mac."
+            "value": "This window is on another desktop. Open it once on the computer."
           }
         },
         "de": {
@@ -41804,7 +41804,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette fenêtre est sur un autre bureau. Ouvrez-la une fois sur le Mac."
+            "value": "Cette fenêtre est sur un autre bureau. Ouvrez-la une fois sur l’ordinateur."
           }
         }
       }
@@ -45549,6 +45549,102 @@
           "stringUnit": {
             "state": "translated",
             "value": "La voix est analysée sur cet iPhone avec les modèles Apple. Aucun audio n’est envoyé dans le cloud."
+          }
+        }
+      }
+    },
+    "ios.workspace.disconnected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Computer disconnected"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordinateur déconnecté"
+          }
+        }
+      }
+    },
+    "ios.workspace.screen.unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen unavailable"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écran indisponible"
+          }
+        }
+      }
+    },
+    "ios.workspace.live.screen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live remote screen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écran distant en direct"
+          }
+        }
+      }
+    },
+    "ios.workspace.screen.connecting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting to the remote screen…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connexion à l’écran distant…"
+          }
+        }
+      }
+    },
+    "ios.workspace.screen.stale": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No screen frame received for 8 seconds. Check the companion, then reopen screen view."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune image reçue depuis 8 secondes. Vérifiez le compagnon, puis rouvrez la vue écran."
+          }
+        }
+      }
+    },
+    "ios.workspace.configuration.invalid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The control configuration is unreadable. Reset controls in Vibe Walkie settings."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La configuration des commandes est illisible. Réinitialisez les commandes dans les réglages de Vibe Walkie."
           }
         }
       }
