@@ -38,6 +38,10 @@ enum ControlInputPolicy {
         min(max(value, 1), 3)
     }
 
+    static func keyRepeatCount(_ value: Int) -> Int {
+        min(max(value, 1), 32)
+    }
+
     static func screenSettings(for request: ScreenStreamRequestPayload) throws -> ScreenSettings {
         guard request.jpegQuality.isFinite else {
             throw RemoteErrorPayload(code: .protocolMismatch, detail: "qualité d’image invalide")

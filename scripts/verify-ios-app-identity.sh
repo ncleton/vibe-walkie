@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-EXPECTED_APP_ID="com.nicolascleton.viberemote"
-EXPECTED_EXTENSION_ID="com.nicolascleton.viberemote.controls"
+EXPECTED_APP_ID="${EXPECTED_APP_ID:-app.vibewalkie}"
+EXPECTED_EXTENSION_ID="${EXPECTED_EXTENSION_ID:-app.vibewalkie.controls}"
 
 usage() {
   echo "Usage: $0 <Vibe Walkie.ipa|VibeWalkie.xcarchive>" >&2

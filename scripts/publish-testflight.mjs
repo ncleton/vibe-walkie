@@ -14,7 +14,7 @@ const wait = args.has("--wait") || assign;
 const buildNumber = process.env.BUILD_NUMBER;
 if (!buildNumber) throw new Error("BUILD_NUMBER est obligatoire.");
 
-const bundleId = process.env.BUNDLE_ID ?? "com.nicolascleton.viberemote";
+const bundleId = process.env.BUNDLE_ID ?? "app.vibewalkie";
 const wantedGroups = (process.env.TESTFLIGHT_GROUPS ?? "Bêta publique Vibe Walkie,Équipe Vibe Walkie")
   .split(",")
   .map((name) => name.trim())

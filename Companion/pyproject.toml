@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vibewalkie-companion"
+version = "1.0.0"
+description = "Vibe Walkie companion for Windows and Linux desktops, including VPS"
+requires-python = ">=3.11"
+license = "MPL-2.0"
+dependencies = [
+  "cryptography==50.0.1",
+  "Pillow==12.3.0",
+  "mss==10.2.0",
+  "zeroconf==0.151.3",
+  "qrcode==8.2",
+  "python-xlib==0.33; sys_platform == 'linux'",
+  "comtypes==1.4.16; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1"]
+
+[project.scripts]
+vibewalkie = "vibewalkie.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

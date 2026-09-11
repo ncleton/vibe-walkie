@@ -2,13 +2,33 @@ import XCTest
 import RemoteCore
 @testable import VibeWalkieiOS
 
+@MainActor
 final class CommercializationConfigurationTests: XCTestCase {
+    func testForegroundReconnectOnlyRunsAfterRealBackgroundTransition() {
+        var gate = ForegroundReconnectGate()
+
+        XCTAssertFalse(gate.consumeReconnectOnActive())
+
+        gate.didEnterBackground()
+        XCTAssertTrue(gate.consumeReconnectOnActive())
+        XCTAssertFalse(gate.consumeReconnectOnActive())
+    }
+
+    func testPremiumProductIdentifiersAreStable() {
+        XCTAssertEqual(PurchaseManager.monthlyProductID, "app.vibewalkie.premium.monthly")
+        XCTAssertEqual(PurchaseManager.yearlyProductID, "app.vibewalkie.premium.yearly")
+        XCTAssertEqual(PurchaseManager.lifetimeProductID, "app.vibewalkie.premium.lifetime")
+        XCTAssertEqual(Set(PurchaseManager.productIDs).count, 3)
+    }
+
     func testWorkingBundleIdentifierAndFrenchPermissionCopy() {
-        XCTAssertEqual(Bundle.main.bundleIdentifier, "com.nicolascleton.viberemote")
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "app.vibewalkie")
         XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") as? String)
         XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") as? String)
         XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription") as? String)
         XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSLocalNetworkUsageDescription") as? String)
+        XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSHealthShareUsageDescription") as? String)
+        XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSHealthUpdateUsageDescription") as? String)
     }
 
     func testBonjourAndEncryptionDeclarationsAreEmbedded() {

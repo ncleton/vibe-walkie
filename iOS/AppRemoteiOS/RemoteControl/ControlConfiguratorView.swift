@@ -104,9 +104,7 @@ struct ControlConfiguratorView: View {
                 GlobalButtonOrderView(
                     configuration: client.controlConfiguration,
                     save: { order in
-                        var configuration = client.controlConfiguration
-                        configuration.setAvailableGlobalButtonOrder(order)
-                        client.updateControlConfiguration(configuration)
+                        client.updateGlobalButtonSlots(order.map(Optional.some))
                     }
                 )
             }

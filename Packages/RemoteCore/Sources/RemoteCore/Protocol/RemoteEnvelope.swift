@@ -37,6 +37,7 @@ public enum RemoteMessageType: String, Codable, Sendable, CaseIterable {
     case activateWindow = "activate_window"
     case keyboardText = "keyboard_text"
     case keyPress = "key_press"
+    case voiceControl = "voice_control"
     case hostShortcutPress = "host_shortcut_press"
     case controlConfigurationRequest = "control_configuration_request"
     case controlConfigurationSnapshot = "control_configuration_snapshot"
@@ -49,6 +50,9 @@ public enum RemoteMessageType: String, Codable, Sendable, CaseIterable {
     case screenStreamRequest = "screen_stream_request"
     case screenStreamStatus = "screen_stream_status"
     case screenFrame = "screen_frame"
+    case workWalkingSessionsRequest = "work_walking_sessions_request"
+    case workWalkingSessionsSnapshot = "work_walking_sessions_snapshot"
+    case healthActivitySnapshotUpdate = "health_activity_snapshot_update"
     case acknowledgement
     case connectionStatus = "connection_status"
     case error

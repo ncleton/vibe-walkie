@@ -1,6 +1,214 @@
 {
   "sourceLanguage": "fr",
   "strings": {
+    "NSCameraUsageDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie uses the camera only on this Mac to estimate your posture in real time. No image is recorded or transmitted."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie utilise la caméra uniquement sur ce Mac pour estimer votre posture en temps réel. Aucune image n’est enregistrée ni transmise."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يستخدم Vibe Walkie الكاميرا على جهاز Mac هذا فقط لتقدير وضعية جسمك في الوقت الفعلي. ولا يتم تسجيل أي صورة أو إرسالها."
+          }
+        },
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie utilitza la càmera només en aquest Mac per estimar la teva postura en temps real. No s’enregistra ni es transmet cap imatge."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie používá kameru pouze na tomto Macu k odhadu vašeho držení těla v reálném čase. Žádný obraz se nezaznamenává ani nepřenáší."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie bruger kun kameraet på denne Mac til at vurdere din kropsholdning i realtid. Ingen billeder optages eller overføres."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie verwendet die Kamera ausschließlich auf diesem Mac, um deine Körperhaltung in Echtzeit einzuschätzen. Es werden keine Bilder aufgezeichnet oder übertragen."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Το Vibe Walkie χρησιμοποιεί την κάμερα μόνο σε αυτό το Mac για να εκτιμά τη στάση του σώματός σας σε πραγματικό χρόνο. Καμία εικόνα δεν καταγράφεται ούτε μεταδίδεται."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie usa la cámara únicamente en este Mac para estimar tu postura en tiempo real. No se graba ni se transmite ninguna imagen."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie käyttää kameraa vain tällä Macilla asentosi arvioimiseen reaaliajassa. Kuvia ei tallenneta eikä lähetetä."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie משתמש במצלמה רק ב‑Mac הזה כדי להעריך את היציבה שלכם בזמן אמת. אף תמונה אינה מוקלטת או מועברת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie केवल इस Mac पर कैमरे का उपयोग करके वास्तविक समय में आपकी मुद्रा का अनुमान लगाता है। कोई छवि रिकॉर्ड या प्रसारित नहीं की जाती।"
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie koristi kameru samo na ovom Macu za procjenu vašeg držanja u stvarnom vremenu. Nijedna se slika ne snima niti prenosi."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Vibe Walkie kizárólag ezen a Macen használja a kamerát a testtartás valós idejű becsléséhez. Nem rögzít és nem továbbít képet."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie hanya menggunakan kamera di Mac ini untuk memperkirakan postur Anda secara real time. Tidak ada gambar yang direkam atau dikirim."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie usa la fotocamera solo su questo Mac per stimare la tua postura in tempo reale. Nessuna immagine viene registrata o trasmessa."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkieは、このMac上でリアルタイムに姿勢を推定するためだけにカメラを使用します。画像が記録または送信されることはありません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie는 이 Mac에서 실시간으로 자세를 추정하기 위해서만 카메라를 사용합니다. 이미지는 녹화되거나 전송되지 않습니다."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie menggunakan kamera hanya pada Mac ini untuk menganggarkan postur anda dalam masa nyata. Tiada imej dirakam atau dihantar."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie bruker kameraet bare på denne Macen for å anslå kroppsholdningen din i sanntid. Ingen bilder tas opp eller overføres."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie gebruikt de camera alleen op deze Mac om je houding in realtime te schatten. Er worden geen beelden opgenomen of verzonden."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie używa kamery wyłącznie na tym Macu, aby w czasie rzeczywistym szacować postawę. Żaden obraz nie jest nagrywany ani przesyłany."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Vibe Walkie utiliza a câmara apenas neste Mac para estimar a sua postura em tempo real. Nenhuma imagem é gravada ou transmitida."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie folosește camera numai pe acest Mac pentru a vă estima postura în timp real. Nicio imagine nu este înregistrată sau transmisă."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie использует камеру только на этом Mac для оценки вашей осанки в реальном времени. Изображения не записываются и не передаются."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie používa kameru iba na tomto Macu na odhad vašej polohy tela v reálnom čase. Žiadny obraz sa nezaznamenáva ani neprenáša."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie använder kameran endast på denna Mac för att uppskatta din hållning i realtid. Inga bilder spelas in eller överförs."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie ใช้กล้องเฉพาะบน Mac เครื่องนี้เพื่อประเมินท่าทางของคุณแบบเรียลไทม์ โดยไม่มีการบันทึกหรือส่งภาพใด ๆ"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie, duruşunuzu gerçek zamanlı olarak tahmin etmek için kamerayı yalnızca bu Mac’te kullanır. Hiçbir görüntü kaydedilmez veya iletilmez."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie використовує камеру лише на цьому Mac для оцінювання вашої постави в реальному часі. Зображення не записуються й не передаються."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie chỉ sử dụng camera trên máy Mac này để ước tính tư thế của bạn theo thời gian thực. Không có hình ảnh nào được ghi lại hoặc truyền đi."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie 只會喺呢部 Mac 使用相機，即時估算你嘅姿勢。任何影像都唔會被錄低或傳送。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie 仅在这台 Mac 上使用摄像头实时估算您的姿势。不会录制或传输任何图像。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibe Walkie 僅在這台 Mac 上使用相機即時估算您的姿勢。不會錄製或傳輸任何影像。"
+          }
+        }
+      }
+    },
     "NSLocalNetworkUsageDescription": {
       "localizations": {
         "fr": {

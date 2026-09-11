@@ -1,6 +1,6 @@
-# Protocol V3
+# Protocol V4
 
-`ProtocolVersion.current = 3`. An envelope using any other version receives `protocolMismatch`, then the connection closes. The user-facing message asks for both apps to be updated.
+`ProtocolVersion.current = 4`. An envelope using any other version receives `version_mismatch`, then the connection closes. Update both apps together. V4 uses host-neutral payloads (`hostName`, `hostPlatform`, `applicationIdentifier`, capabilities and readiness fields); platform values are `macos`, `windows` and `linux`.
 
 ## Transport
 
@@ -19,7 +19,7 @@
 3. Mac → iPhone: `pairing_pending` with request, name, code and expiry.
 4. Mac click: `connection_status`, or `pairing_denied` / `pairing_approval_expired` error.
 
-A known device omits the QR secret and must prove possession of the same private key.
+A known device omits the QR secret and must prove possession of the same Ed25519 private key. The challenge signature covers nonce bytes, UTF-8 device identifier and the optional QR-secret bytes, in that order. Command records are protected by the authenticated, pinned TLS channel and sequencing; they do not carry individual signatures.
 
 The local QR code expires after 120 seconds. The Roaming QR code expires after 600 seconds and can be scanned, imported from an image or pasted in compact form. There is intentionally no web pairing link. An unauthenticated connection closes after ten seconds; the Mac accepts at most eight pending sessions and applies a global new-connection limit.
 
@@ -37,7 +37,9 @@ Manual typing uses `keyboard_text` with `userInitiated = true` and remains separ
 
 Allowed commands are named keyboard events, bounded pointer movement/click/drag/scroll, window inventory/activation and screen-stream enable/disable. Any unknown or invalid type fails without generic execution.
 
-The panel around Push-to-Talk uses seven `ControlZone` values. The Mac keeps the reference configuration and sends it with `control_configuration_snapshot`. The iPhone can propose an update through `control_configuration_update`. Hardware shortcuts are captured on the Mac, limited to a CoreGraphics-known keycode, then triggered by `mac_shortcut_press`. Imported images are resized and capped so the complete configuration remains below the frame limit.
+The panel around Push-to-Talk uses seven `ControlZone` values. Each host keeps its reference configuration and sends it with `control_configuration_snapshot`. The iPhone stores pending updates by host fingerprint and proposes them through `control_configuration_update`. Hardware shortcuts stay on the host. Clients receive only an opaque ID and display metadata, then trigger `host_shortcut_press`. Imported images are resized and capped so the complete configuration remains below the frame limit.
+
+The Windows/Linux companion exposes the same request and response names, with real OS-specific adapters. Linux desktop sessions use X11/AT-SPI; VPS sessions can run on Xvfb. Windows input and capture require an unlocked interactive desktop. Unsupported input targets, denied activation and missing capture produce explicit errors. `invalid_control_configuration` identifies unreadable saved controls and asks the operator to reset them.
 
 ## Idempotency
 

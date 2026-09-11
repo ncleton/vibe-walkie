@@ -46,6 +46,7 @@ struct V4FixtureTests {
         )
         #expect(status.hostPlatform == .windows)
         #expect(status.capabilities == HostCapability.fullControl.sorted { $0.rawValue < $1.rawValue })
+        #expect(status.acknowledgesPointerMoves == nil)
     }
 
     @Test("La palette de raccourcis hôte reste opaque et interopérable")
@@ -69,7 +70,7 @@ struct V4FixtureTests {
     @Test("Les erreurs V4 partagées sont identiques")
     func errorsFixture() throws {
         let fixture = try RemoteCoding.decoder.decode(ErrorFixture.self, from: fixture("errors.json"))
-        #expect(fixture.codes == [.versionMismatch, .unsupportedCapability, .inputUnavailable, .screenUnavailable, .secureTarget, .targetLost, .activationDenied, .rateLimited])
+        #expect(fixture.codes == [.versionMismatch, .unsupportedCapability, .inputUnavailable, .screenUnavailable, .secureTarget, .targetLost, .activationDenied, .rateLimited, .invalidControlConfiguration])
     }
 
     @Test("Une image JPEG/base64 reste interopérable")

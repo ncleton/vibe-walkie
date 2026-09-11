@@ -294,9 +294,32 @@ public enum RemoteKey: String, Codable, Sendable, CaseIterable {
 
 public struct KeyPressPayload: Codable, Sendable {
     public let key: RemoteKey
+    /// Nombre d'appuis identiques à rejouer. Les anciens compagnons ignorent
+    /// ce champ et conservent donc un comportement compatible à un appui.
+    public let repeatCount: Int
 
-    public init(key: RemoteKey) {
+    public init(key: RemoteKey, repeatCount: Int = 1) {
         self.key = key
+        self.repeatCount = repeatCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case key
+        case repeatCount = "repeat_count"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        key = try container.decode(RemoteKey.self, forKey: .key)
+        repeatCount = try container.decodeIfPresent(Int.self, forKey: .repeatCount) ?? 1
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(key, forKey: .key)
+        if repeatCount != 1 {
+            try container.encode(repeatCount, forKey: .repeatCount)
+        }
     }
 }
 
@@ -427,6 +450,106 @@ public struct ScreenFramePayload: Codable, Sendable {
     }
 }
 
+// MARK: - Santé et marche pendant le travail
+
+/// Créneau pendant lequel le compagnon Mac a détecté une marche devant la
+/// caméra. Le Mac ne prétend pas compter les pas : l'iPhone rapproche ces
+/// bornes temporelles des pas agrégés par Apple Santé.
+public struct WorkWalkingSession: Codable, Sendable, Equatable, Identifiable {
+    public let id: UUID
+    public let startedAt: Date
+    public let endedAt: Date
+    public let isOngoing: Bool
+
+    public init(
+        id: UUID = UUID(),
+        startedAt: Date,
+        endedAt: Date,
+        isOngoing: Bool = false
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = max(endedAt, startedAt)
+        self.isOngoing = isOngoing
+    }
+
+    public var duration: TimeInterval {
+        max(0, endedAt.timeIntervalSince(startedAt))
+    }
+}
+
+public struct WorkWalkingSessionsRequestPayload: Codable, Sendable, Equatable {
+    public let since: Date
+
+    public init(since: Date) {
+        self.since = since
+    }
+}
+
+public struct WorkWalkingSessionsSnapshotPayload: Codable, Sendable, Equatable {
+    public let sessions: [WorkWalkingSession]
+    public let capturedAt: Date
+
+    public init(sessions: [WorkWalkingSession], capturedAt: Date = Date()) {
+        self.sessions = sessions
+        self.capturedAt = capturedAt
+    }
+}
+
+/// Résumé Santé calculé sur l'iPhone puis envoyé au compagnon Mac.
+///
+/// Seuls des agrégats sont transportés : aucun échantillon HealthKit brut,
+/// aucune fréquence cardiaque et aucun itinéraire ne quittent l'iPhone.
+public struct HealthActivitySnapshotPayload: Codable, Sendable, Equatable {
+    /// Minutes que HealthKit classe à une intensité au moins équivalente à une
+    /// marche soutenue, limitées aux sessions où l'app est active et connectée.
+    /// `nil` signifie que cette mesure n'est pas disponible dans Santé.
+    public let briskWalkingMinutesLast7Days: Double?
+    public let walkingDistanceMetersLast7Days: Double
+    /// Durée des sessions de travail. Le nom historique est conservé sur le
+    /// fil pour que les versions déjà distribuées restent compatibles.
+    public let detectedWalkingDurationLast7Days: TimeInterval
+    public let capturedAt: Date
+
+    public init(
+        briskWalkingMinutesLast7Days: Double?,
+        walkingDistanceMetersLast7Days: Double,
+        detectedWalkingDurationLast7Days: TimeInterval,
+        capturedAt: Date = Date()
+    ) {
+        self.briskWalkingMinutesLast7Days = briskWalkingMinutesLast7Days.map { max(0, $0) }
+        self.walkingDistanceMetersLast7Days = max(0, walkingDistanceMetersLast7Days)
+        self.detectedWalkingDurationLast7Days = max(0, detectedWalkingDurationLast7Days)
+        self.capturedAt = capturedAt
+    }
+}
+
+// MARK: - Contrôle vocal des applications du Mac
+
+/// Applications dont Vibe Walkie peut actionner les contrôles vocaux visibles.
+/// La liste reste fermée : le téléphone ne peut pas fournir un bundle ID ou une
+/// commande d'accessibilité arbitraire au compagnon.
+public enum VoiceAssistantProvider: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
+    case chatGPT = "chatgpt"
+    case claude
+}
+
+public enum VoiceControlPhase: String, Codable, Sendable, Equatable {
+    case began
+    case ended
+    case cancelled
+}
+
+public struct VoiceControlPayload: Codable, Sendable, Equatable {
+    public let provider: VoiceAssistantProvider
+    public let phase: VoiceControlPhase
+
+    public init(provider: VoiceAssistantProvider, phase: VoiceControlPhase) {
+        self.provider = provider
+        self.phase = phase
+    }
+}
+
 // MARK: - Accusés et erreurs
 
 public struct AcknowledgementPayload: Codable, Sendable {
@@ -449,6 +572,10 @@ public struct ConnectionStatusPayload: Codable, Sendable, Equatable {
     public let capabilities: [HostCapability]
     public let companionVersion: String
     public let nomadEndpoint: NomadEndpoint?
+    /// `true` uniquement lorsque le compagnon répond après l'injection réelle
+    /// d'un déplacement relatif. Optionnel pour rester décodable depuis les
+    /// compagnons V4 déjà distribués.
+    public let acknowledgesPointerMoves: Bool?
 
     public init(
         inputControlReady: Bool,
@@ -457,7 +584,8 @@ public struct ConnectionStatusPayload: Codable, Sendable, Equatable {
         hostPlatform: HostPlatform,
         capabilities: [HostCapability],
         companionVersion: String,
-        nomadEndpoint: NomadEndpoint? = nil
+        nomadEndpoint: NomadEndpoint? = nil,
+        acknowledgesPointerMoves: Bool? = nil
     ) {
         self.inputControlReady = inputControlReady
         self.screenCaptureReady = screenCaptureReady
@@ -466,6 +594,7 @@ public struct ConnectionStatusPayload: Codable, Sendable, Equatable {
         self.capabilities = Array(Set(capabilities)).sorted { $0.rawValue < $1.rawValue }
         self.companionVersion = companionVersion
         self.nomadEndpoint = nomadEndpoint
+        self.acknowledgesPointerMoves = acknowledgesPointerMoves
     }
 
     public init(
@@ -481,7 +610,8 @@ public struct ConnectionStatusPayload: Codable, Sendable, Equatable {
             hostPlatform: .macOS,
             capabilities: HostCapability.fullControl,
             companionVersion: companionVersion,
-            nomadEndpoint: nomadEndpoint
+            nomadEndpoint: nomadEndpoint,
+            acknowledgesPointerMoves: nil
         )
     }
 

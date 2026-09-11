@@ -8,10 +8,14 @@
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleIconFile</key>
+	<string>VibeWalkieIcon</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>$(VIBE_WALKIE_MAC_DISPLAY_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
@@ -22,10 +26,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.nicolascleton.viberemote.mac.updates</string>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).updates</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>vibewalkie-mac</string>
+				<string>$(VIBE_WALKIE_MAC_UPDATE_SCHEME)</string>
 			</array>
 		</dict>
 	</array>
@@ -45,6 +49,8 @@
 	<array>
 		<string>_viberemote._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Vibe Walkie utilise la caméra uniquement sur ce Mac pour estimer votre posture en temps réel. Aucune image n’est enregistrée ni transmise.</string>
 	<key>SUFeedURL</key>
 	<string>https://app-remote.92.222.247.135.sslip.io/releases/macos/appcast.xml</string>
 	<key>SUPublicEDKey</key>

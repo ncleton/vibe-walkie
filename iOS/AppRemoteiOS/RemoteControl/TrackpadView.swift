@@ -5,8 +5,8 @@ import RemoteCore
 enum TrackpadSettings {
     static let pointerRange = 0.5...6.0
     static let scrollRange = 0.2...5.0
-    static let defaultPointerSpeed = 2.0
-    static let defaultScrollSpeed = 1.2
+    static let defaultPointerSpeed = pointerRange.upperBound
+    static let defaultScrollSpeed = scrollRange.upperBound
 
     private static let pointerKey = "trackpadSensitivity"
     private static let scrollKey = "scrollSensitivity"
@@ -39,6 +39,77 @@ enum TrackpadGestureMath {
     }
 }
 
+enum TrackpadLongPressOutcome: Equatable {
+    case contextMenu
+    case contextMenuPresented
+    case dragEnded
+}
+
+enum TrackpadLongPressChange: Equatable {
+    case pending
+    case dragBegan(CGPoint)
+    case dragMoved(CGPoint)
+}
+
+/// Un maintien immobile reproduit le clic droit du Mac. Si le doigt commence
+/// à bouger, le même geste devient un glisser-déposer sans saut du pointeur.
+struct TrackpadLongPressState: Equatable {
+    static let dragActivationDistance: CGFloat = 8
+
+    private(set) var origin: CGPoint?
+    private(set) var previousPoint: CGPoint?
+    private(set) var isDragging = false
+    private(set) var didPresentContextMenu = false
+
+    mutating func begin(at point: CGPoint) {
+        origin = point
+        previousPoint = point
+        isDragging = false
+        didPresentContextMenu = false
+    }
+
+    mutating func change(to point: CGPoint) -> TrackpadLongPressChange {
+        guard !didPresentContextMenu,
+              let origin,
+              let previousPoint else { return .pending }
+
+        if isDragging {
+            let delta = CGPoint(x: point.x - previousPoint.x, y: point.y - previousPoint.y)
+            self.previousPoint = point
+            return .dragMoved(delta)
+        }
+
+        let delta = CGPoint(x: point.x - origin.x, y: point.y - origin.y)
+        guard hypot(delta.x, delta.y) >= Self.dragActivationDistance else { return .pending }
+
+        isDragging = true
+        self.previousPoint = point
+        return .dragBegan(delta)
+    }
+
+    mutating func presentContextMenuIfPending() -> Bool {
+        guard origin != nil, !isDragging, !didPresentContextMenu else { return false }
+        didPresentContextMenu = true
+        return true
+    }
+
+    mutating func end() -> TrackpadLongPressOutcome {
+        let outcome: TrackpadLongPressOutcome
+        if isDragging {
+            outcome = .dragEnded
+        } else if didPresentContextMenu {
+            outcome = .contextMenuPresented
+        } else {
+            outcome = .contextMenu
+        }
+        origin = nil
+        previousPoint = nil
+        isDragging = false
+        didPresentContextMenu = false
+        return outcome
+    }
+}
+
 /// Regroupe les événements UIKit reçus entre deux envois. Un glissement peut
 /// produire bien plus de callbacks que le réseau et le Mac ne peuvent en
 /// afficher ; additionner les deltas conserve exactement le déplacement sans
@@ -57,6 +128,18 @@ struct TrackpadPendingDeltas: Equatable {
         let drained = self
         self = .init()
         return drained
+    }
+}
+
+enum TrackpadDeliveryPolicy {
+    static let minimumFramesPerSecond = 60
+    static let maximumFramesPerSecond = 120
+
+    static func frameRateRange(maximumSupportedFramesPerSecond: Int) -> ClosedRange<Int> {
+        let supported = max(1, maximumSupportedFramesPerSecond)
+        let upperBound = min(supported, maximumFramesPerSecond)
+        let lowerBound = min(minimumFramesPerSecond, upperBound)
+        return lowerBound...upperBound
     }
 }
 
@@ -104,12 +187,9 @@ struct TrackpadView: View {
     private var touchSurface: some View {
         TouchpadSurface(
             onMove: { delta in
-                client.sendFireAndForget(
-                    type: .pointerMove,
-                    payload: PointerMovePayload(
-                        deltaX: delta.x * sensitivity,
-                        deltaY: delta.y * sensitivity
-                    )
+                client.sendPointerMove(
+                    deltaX: delta.x * sensitivity,
+                    deltaY: delta.y * sensitivity
                 )
             },
             onScroll: { delta in
@@ -132,6 +212,13 @@ struct TrackpadView: View {
                 client.sendFireAndForget(
                     type: .pointerClick,
                     payload: PointerClickPayload(button: .left, clickCount: 1)
+                )
+            },
+            onSecondaryClick: {
+                HapticFeedback.shared.tick()
+                client.sendFireAndForget(
+                    type: .pointerClick,
+                    payload: PointerClickPayload(button: .right, clickCount: 1)
                 )
             },
             onDrag: { phase, delta in
@@ -188,6 +275,7 @@ private struct TouchpadSurface: UIViewRepresentable {
     var onScroll: (CGPoint) -> Void
     var onZoom: (Double) -> Void
     var onClick: () -> Void
+    var onSecondaryClick: () -> Void
     var onDrag: (DragPhase, CGPoint) -> Void
 
     func makeUIView(context: Context) -> TouchpadUIView {
@@ -205,22 +293,25 @@ private struct TouchpadSurface: UIViewRepresentable {
         view.onScroll = onScroll
         view.onZoom = onZoom
         view.onClick = onClick
+        view.onSecondaryClick = onSecondaryClick
         view.onDrag = onDrag
     }
 }
 
 private final class TouchpadUIView: UIView, UIGestureRecognizerDelegate {
     static let scrollStripWidth: CGFloat = 48
+    private static let contextMenuGraceDuration = 0.12
 
     var onMove: ((CGPoint) -> Void)?
     var onScroll: ((CGPoint) -> Void)?
     var onZoom: ((Double) -> Void)?
     var onClick: (() -> Void)?
+    var onSecondaryClick: (() -> Void)?
     var onDrag: ((DragPhase, CGPoint) -> Void)?
-    private var previousDragPoint: CGPoint?
+    private var longPressState = TrackpadLongPressState()
+    private var contextMenuWorkItem: DispatchWorkItem?
     private var pendingDeltas = TrackpadPendingDeltas()
-    private var lastContinuousFlushTime: CFTimeInterval = 0
-    private static let minimumFlushInterval: CFTimeInterval = 1.0 / 30.0
+    private var displayLink: CADisplayLink?
 
     private lazy var moveGesture = makePan(touches: 1, action: #selector(handleMove(_:)))
     private lazy var scrollGesture = makePan(touches: 2, action: #selector(handleScroll(_:)))
@@ -261,6 +352,15 @@ private final class TouchpadUIView: UIView, UIGestureRecognizerDelegate {
 
     required init?(coder: NSCoder) { nil }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window == nil else { return }
+        contextMenuWorkItem?.cancel()
+        contextMenuWorkItem = nil
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
     private func makePan(touches: Int, action: Selector) -> UIPanGestureRecognizer {
         let gesture = UIPanGestureRecognizer(target: self, action: action)
         gesture.minimumNumberOfTouches = touches
@@ -280,6 +380,7 @@ private final class TouchpadUIView: UIView, UIGestureRecognizerDelegate {
             scheduleFlush()
         case .ended, .cancelled, .failed:
             flushPendingEvents()
+            stopDisplayLinkIfIdle()
         default:
             break
         }
@@ -296,6 +397,7 @@ private final class TouchpadUIView: UIView, UIGestureRecognizerDelegate {
             scheduleFlush()
         case .ended, .cancelled, .failed:
             flushPendingEvents()
+            stopDisplayLinkIfIdle()
         default:
             break
         }
@@ -304,6 +406,7 @@ private final class TouchpadUIView: UIView, UIGestureRecognizerDelegate {
     @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
         if gesture.state == .ended || gesture.state == .cancelled || gesture.state == .failed {
             flushPendingEvents()
+            stopDisplayLinkIfIdle()
             return
         }
         guard gesture.state == .began || gesture.state == .changed else { return }
@@ -323,6 +426,7 @@ private final class TouchpadUIView: UIView, UIGestureRecognizerDelegate {
             scheduleFlush()
         case .ended, .cancelled, .failed:
             flushPendingEvents()
+            stopDisplayLinkIfIdle()
         default:
             break
         }
@@ -338,46 +442,113 @@ private final class TouchpadUIView: UIView, UIGestureRecognizerDelegate {
         case .began:
             flushPendingEvents()
             HapticFeedback.shared.armedForCancel()
-            previousDragPoint = gesture.location(in: self)
-            onDrag?(.began, .zero)
+            longPressState.begin(at: gesture.location(in: self))
+            scheduleContextMenu()
         case .changed:
             let location = gesture.location(in: self)
-            let previous = previousDragPoint ?? location
-            pendingDeltas.drag.x += location.x - previous.x
-            pendingDeltas.drag.y += location.y - previous.y
-            previousDragPoint = location
-            scheduleFlush()
-        case .ended, .cancelled, .failed:
+            switch longPressState.change(to: location) {
+            case .pending:
+                break
+            case let .dragBegan(delta):
+                cancelScheduledContextMenu()
+                onDrag?(.began, .zero)
+                pendingDeltas.drag.x += delta.x
+                pendingDeltas.drag.y += delta.y
+                scheduleFlush()
+            case let .dragMoved(delta):
+                pendingDeltas.drag.x += delta.x
+                pendingDeltas.drag.y += delta.y
+                scheduleFlush()
+            }
+        case .ended:
+            cancelScheduledContextMenu()
             flushPendingEvents()
-            previousDragPoint = nil
-            onDrag?(.ended, .zero)
+            switch longPressState.end() {
+            case .contextMenu:
+                onSecondaryClick?()
+            case .contextMenuPresented:
+                break
+            case .dragEnded:
+                onDrag?(.ended, .zero)
+            }
+            stopDisplayLinkIfIdle()
+        case .cancelled, .failed:
+            cancelScheduledContextMenu()
+            flushPendingEvents()
+            if longPressState.end() == .dragEnded {
+                onDrag?(.ended, .zero)
+            }
+            stopDisplayLinkIfIdle()
         default:
             break
         }
     }
 
+    private func scheduleContextMenu() {
+        cancelScheduledContextMenu()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.longPressState.presentContextMenuIfPending() else { return }
+            self.onSecondaryClick?()
+            self.contextMenuWorkItem = nil
+        }
+        contextMenuWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.contextMenuGraceDuration,
+            execute: workItem
+        )
+    }
+
+    private func cancelScheduledContextMenu() {
+        contextMenuWorkItem?.cancel()
+        contextMenuWorkItem = nil
+    }
+
     private func scheduleFlush() {
-        // Aucun minuteur et aucune boucle à 60 Hz : on ne travaille que lors
-        // d'un vrai événement tactile. Au-delà de 30 envois/s, les deltas
-        // restent simplement agrégés jusqu'au prochain événement ou jusqu'à
-        // la fin du geste.
-        let now = CACurrentMediaTime()
-        guard now - lastContinuousFlushTime >= Self.minimumFlushInterval else { return }
-        flushPendingEvents(at: now)
+        guard displayLink == nil else { return }
+        let displayLink = CADisplayLink(target: self, selector: #selector(displayLinkTick))
+        let frameRate = TrackpadDeliveryPolicy.frameRateRange(
+            maximumSupportedFramesPerSecond: window?.screen.maximumFramesPerSecond ?? 60
+        )
+        displayLink.preferredFrameRateRange = CAFrameRateRange(
+            minimum: Float(frameRate.lowerBound),
+            maximum: Float(frameRate.upperBound),
+            preferred: Float(frameRate.upperBound)
+        )
+        // Les deltas restent agrégés entre deux rafraîchissements, mais
+        // chaque mouvement part sur l'horloge native de l'écran (60 ou 120 Hz)
+        // plutôt qu'au rythme irrégulier des callbacks tactiles.
+        displayLink.add(to: .main, forMode: .common)
+        self.displayLink = displayLink
     }
 
     @objc private func flushPendingEvents() {
-        flushPendingEvents(at: CACurrentMediaTime())
+        flushPendingEventsOnDisplayFrame()
     }
 
-    private func flushPendingEvents(at time: CFTimeInterval) {
+    @objc private func displayLinkTick() {
+        flushPendingEventsOnDisplayFrame()
+    }
+
+    private func flushPendingEventsOnDisplayFrame() {
         guard !pendingDeltas.isEmpty else { return }
         let drained = pendingDeltas.drain()
-        lastContinuousFlushTime = time
         if drained.move != .zero { onMove?(drained.move) }
         if drained.scroll != .zero { onScroll?(drained.scroll) }
         if drained.zoom != 0 { onZoom?(drained.zoom) }
         if drained.drag != .zero { onDrag?(.moved, drained.drag) }
+    }
+
+    private func stopDisplayLinkIfIdle() {
+        let gesturesAreIdle = [
+            moveGesture.state,
+            scrollGesture.state,
+            pinchGesture.state,
+            scrollStripGesture.state,
+            dragGesture.state
+        ].allSatisfy { $0 != .began && $0 != .changed }
+        guard gesturesAreIdle else { return }
+        displayLink?.invalidate()
+        displayLink = nil
     }
 
     func gestureRecognizer(

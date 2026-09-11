@@ -5,7 +5,7 @@
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
-      runPostActionsOnFailure = "NO">
+      runPostActionsOnFailure = "YES">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -29,6 +29,24 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       onlyGenerateCoverageForSpecifiedTargets = "NO">
+      <PostActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Fermer l’hôte Vibe Walkie des tests"
+               scriptText = "cleanup_script=&quot;$SRCROOT/../scripts/cleanup-macos-test-bundles.sh&quot;&#10;if test -x &quot;$cleanup_script&quot;; then&#10;  VIBE_WALKIE_PRODUCTS_DIR=&quot;$BUILT_PRODUCTS_DIR&quot; &quot;$cleanup_script&quot; || true&#10;fi&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "29004532C4997B45BF38E386"
+                     BuildableName = "AppRemoteMac.app"
+                     BlueprintName = "AppRemoteMac"
+                     ReferencedContainer = "container:AppRemoteMac.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PostActions>
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"

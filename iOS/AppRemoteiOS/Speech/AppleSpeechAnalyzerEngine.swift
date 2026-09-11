@@ -138,11 +138,10 @@ final class AppleSpeechAnalyzerEngine: SpeechEngine {
         resultsTask = transcriber.makeResultsTask(state: state)
 
         do {
-            try await analyzer.prepareToAnalyze(in: analyzerFormat)
-            guard generation == captureGeneration else { throw CancellationError() }
-            try await analyzer.start(inputSequence: inputs)
-            guard generation == captureGeneration else { throw CancellationError() }
-
+            // Ouvrir le micro avant les derniers awaits de SpeechAnalyzer.
+            // `inputs` bufferise les AnalyzerInput tant que l'analyseur n'a
+            // pas encore commencé à les consommer : les premiers mots sont
+            // ainsi conservés au lieu d'être prononcés pendant sa préparation.
             inputNode.installTap(
                 onBus: 0,
                 bufferSize: 4096,
@@ -152,6 +151,11 @@ final class AppleSpeechAnalyzerEngine: SpeechEngine {
             tapInstalled = true
             audioEngine.prepare()
             try audioEngine.start()
+
+            try await analyzer.prepareToAnalyze(in: analyzerFormat)
+            guard generation == captureGeneration else { throw CancellationError() }
+            try await analyzer.start(inputSequence: inputs)
+            guard generation == captureGeneration else { throw CancellationError() }
         } catch {
             await discardCurrentRecognition()
             throw error

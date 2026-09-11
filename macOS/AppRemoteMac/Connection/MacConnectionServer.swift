@@ -16,6 +16,7 @@ final class MacConnectionServer: ObservableObject {
     @Published private(set) var nomadEndpoint: NomadEndpoint?
     @Published private(set) var hasCompletedFirstCommand: Bool
     @Published private(set) var controlConfiguration: ControlConfiguration
+    @Published private(set) var healthActivitySnapshot: HealthActivitySnapshotPayload?
 
     private var listener: NWListener?
     private var identity: SecIdentity?
@@ -29,6 +30,7 @@ final class MacConnectionServer: ObservableObject {
     private let peers: ApprovedPeersStore
     private let authority: PairingAuthority
     private let shortcutStore: HostShortcutStore
+    private let walkingSessions: WorkWalkingSessionStore
 
     /// Une connexion en cours de vie, avec son état d'authentification.
     ///
@@ -62,21 +64,36 @@ final class MacConnectionServer: ObservableObject {
     init(
         peers: ApprovedPeersStore,
         authority: PairingAuthority,
+        walkingSessions: WorkWalkingSessionStore,
         nomadEndpoint: NomadEndpoint? = nil
     ) {
         self.peers = peers
         self.authority = authority
+        self.walkingSessions = walkingSessions
         let shortcutStore = HostShortcutStore()
         self.shortcutStore = shortcutStore
         self.nomadEndpoint = nomadEndpoint?.isValid == true ? nomadEndpoint : nil
         self.hasCompletedFirstCommand = UserDefaults.standard.bool(forKey: "hasCompletedFirstCommand")
         self.controlConfiguration = shortcutStore.migrate(Self.loadControlConfiguration())
+        self.healthActivitySnapshot = nil
     }
 
     var certificateFingerprint: String? {
         guard let identity else { return nil }
         return try? TLSIdentityStore.fingerprint(of: identity)
     }
+
+#if DEBUG
+    /// Résumé déterministe réservé aux captures marketing du dashboard Santé.
+    func configureMarketingHealthPreview(now: Date = Date()) {
+        healthActivitySnapshot = HealthActivitySnapshotPayload(
+            briskWalkingMinutesLast7Days: 472,
+            walkingDistanceMetersLast7Days: 24_680,
+            detectedWalkingDurationLast7Days: 9 * 3_600 + 18 * 60,
+            capturedAt: now
+        )
+    }
+#endif
 
     // MARK: - Cycle de vie
 
@@ -179,7 +196,9 @@ final class MacConnectionServer: ObservableObject {
         sec_protocol_options_set_local_identity(options.securityProtocolOptions, secIdentity)
         sec_protocol_options_set_min_tls_protocol_version(options.securityProtocolOptions, .TLSv13)
 
-        let parameters = NWParameters(tls: options)
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        let parameters = NWParameters(tls: options, tcp: tcp)
         parameters.includePeerToPeer = true
         return parameters
     }
@@ -352,6 +371,17 @@ final class MacConnectionServer: ObservableObject {
                 peerID: router.peerID,
                 to: session
             )
+        case .gestureAcknowledged:
+            // Ce retour est le vrai mécanisme de pression réseau du pointeur :
+            // l'iPhone n'envoie le prochain delta agrégé qu'après réception.
+            // Il n'est pas conservé entre les sessions, contrairement aux
+            // commandes qui peuvent être rejouées après une reconnexion.
+            send(
+                type: .acknowledgement,
+                payload: AcknowledgementPayload(ok: true),
+                to: session,
+                replyTo: envelope.messageID
+            )
         case .snapshot(let payload):
             send(type: .windowsSnapshot, payload: payload, to: session, replyTo: envelope.messageID)
         case .screenRequest(let payload):
@@ -360,6 +390,22 @@ final class MacConnectionServer: ObservableObject {
             sendControlConfiguration(to: session, replyTo: envelope.messageID)
         case .controlConfigurationUpdate(let configuration):
             updateControlConfigurationFromPeer(configuration)
+            sendResponse(
+                type: .acknowledgement,
+                payload: AcknowledgementPayload(ok: true),
+                for: envelope,
+                peerID: router.peerID,
+                to: session
+            )
+        case .workWalkingSessionsRequest(let since):
+            send(
+                type: .workWalkingSessionsSnapshot,
+                payload: walkingSessions.snapshot(since: since),
+                to: session,
+                replyTo: envelope.messageID
+            )
+        case .healthActivitySnapshotUpdate(let payload):
+            healthActivitySnapshot = payload
             sendResponse(
                 type: .acknowledgement,
                 payload: AcknowledgementPayload(ok: true),
@@ -398,6 +444,20 @@ final class MacConnectionServer: ObservableObject {
                 peerID: router.peerID,
                 to: session
             )
+        case .voiceControl(let payload):
+            NSLog(
+                "[VibeWalkie] voice_control_received provider=%@ phase=%@",
+                payload.provider.rawValue,
+                payload.phase.rawValue
+            )
+            AIVoiceModeAutomation.handle(payload)
+            sendResponse(
+                type: .acknowledgement,
+                payload: AcknowledgementPayload(ok: true),
+                for: envelope,
+                peerID: router.peerID,
+                to: session
+            )
         case .failure(let error):
             sendResponse(error: error, for: envelope, peerID: router.peerID, to: session)
         case .ignore:
@@ -421,7 +481,8 @@ final class MacConnectionServer: ObservableObject {
             .recordingStarted,
             .listWindows,
             .screenStreamRequest,
-            .controlConfigurationRequest
+            .controlConfigurationRequest,
+            .workWalkingSessionsRequest
         ].contains(type)
     }
 
@@ -485,9 +546,10 @@ final class MacConnectionServer: ObservableObject {
                 screenCaptureReady: CGPreflightScreenCaptureAccess(),
                 hostName: Host.current().localizedName ?? "Mac",
                 hostPlatform: .macOS,
-                capabilities: HostCapability.fullControl,
+                capabilities: HostCapability.fullControl + [.smoothCursorNavigation],
                 companionVersion: Bundle.main.appVersion,
-                nomadEndpoint: nomadEndpoint
+                nomadEndpoint: nomadEndpoint,
+                acknowledgesPointerMoves: true
             ),
             to: session,
             replyTo: replyTo

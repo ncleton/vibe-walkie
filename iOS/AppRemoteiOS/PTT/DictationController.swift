@@ -8,8 +8,10 @@ protocol DictationTransport: AnyObject {
 
 extension HostConnectionClient: DictationTransport {}
 
-/// Orchestration d'une dictée transactionnelle : la cible est capturée avant
-/// le micro et le texte n'est annoncé livré qu'après l'accusé du Mac.
+/// Orchestration d'une dictée transactionnelle : la cible et le micro sont
+/// préparés en parallèle, puis le texte n'est annoncé livré qu'après l'accusé
+/// du Mac. Le parallélisme est indispensable pour ne pas perdre les premiers
+/// mots pendant l'aller-retour réseau qui capture le champ cible.
 @MainActor
 final class DictationController: ObservableObject {
 
@@ -109,18 +111,23 @@ final class DictationController: ObservableObject {
         captureTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let token = try await requestTarget(for: currentID)
+                async let requestedToken = requestTarget(for: currentID)
+                try await startCapture()
+                let token = try await requestedToken
                 guard !Task.isCancelled, isRecording, dictationID == currentID else {
+                    await engine?.cancel()
                     await cancelRemoteTarget(for: currentID)
                     return
                 }
                 targetToken = token
-                try await startCapture()
             } catch is CancellationError {
+                await engine?.cancel()
                 await cancelRemoteTarget(for: currentID)
             } catch let error as RemoteErrorPayload {
+                await engine?.cancel()
                 await fail(AppL10n.remoteError(error.code))
             } catch {
+                await engine?.cancel()
                 await fail(error.localizedDescription)
             }
         }
@@ -162,6 +169,15 @@ final class DictationController: ObservableObject {
     func pressCancelled() {
         guard isRecording else { return }
         cancelDictation(reason: AppL10n.text("ios.close.711e5f2"))
+    }
+
+    /// Affiche une erreur provenant d'un contrôle distant qui ne passe pas
+    /// par le moteur de dictée Apple (ChatGPT ou Claude).
+    func reportRemoteControlFailure(_ message: String) {
+        resetTask?.cancel()
+        HapticFeedback.shared.failed()
+        phase = .failed(message)
+        scheduleReset()
     }
 
     private func requestTarget(for id: UUID) async throws -> TargetToken {

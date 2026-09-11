@@ -3,12 +3,14 @@ import CoreImage.CIFilterBuiltins
 import RemoteCore
 
 struct MenuBarView: View {
+    @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var server: MacConnectionServer
     @EnvironmentObject private var permissions: PermissionCoordinator
     @EnvironmentObject private var authority: PairingAuthority
     @EnvironmentObject private var peers: ApprovedPeersStore
     @EnvironmentObject private var tailscale: TailscaleCoordinator
     @EnvironmentObject private var updates: UpdateController
+    @EnvironmentObject private var postureCoach: PostureCoachController
     @State private var showResetConfirmation = false
     @State private var showControlConfigurator = false
     @State private var showNomadSetup = false
@@ -96,12 +98,16 @@ struct MenuBarView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            if updates.presentationState.isVisible {
+                updateSection
+            }
             if !InstallationLocation.isSuitable {
                 installationSection
             } else {
                 if shouldShowNomadDiscovery { nomadDiscoveryBanner }
                 if peers.peers.allSatisfy(\.isRevoked) { welcomeSection }
                 permissionSection
+                postureCoachSection
 
                 if let pending = authority.pendingApproval {
                     approvalSection(pending)
@@ -143,6 +149,48 @@ struct MenuBarView: View {
             Button("mac.open.applications.25aa8d9") { InstallationLocation.openApplicationsFolder() }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.remoteBlue)
+        }
+        .remoteCard()
+    }
+
+    private var updateSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.remoteBlue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("mac.update.available.0d130ab")
+                        .font(.headline)
+                    if let version = updates.presentationState.version {
+                        Text(MacL10n.format("mac.version.value.is.ready.to.install.03ed2d8", version))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Button {
+                updates.installAvailableUpdate()
+            } label: {
+                HStack(spacing: 8) {
+                    if updates.presentationState.isBusy {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text("mac.update.now.c2511f5")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.remoteBlue)
+            .disabled(updates.presentationState.isBusy)
+
+            if updates.presentationState.isBusy {
+                Text("mac.vibe.walkie.will.relaunch.automatically.after.the.update.9b9d835")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .remoteCard()
     }
@@ -389,6 +437,115 @@ struct MenuBarView: View {
         }
         .buttonStyle(.plain)
         .remoteCard()
+    }
+
+    private var postureCoachSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(postureMenuTint.opacity(0.16))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: postureMenuIcon)
+                        .foregroundStyle(postureMenuTint)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Module Santé")
+                            .font(.subheadline.bold())
+                        Text("BÊTA")
+                            .font(.system(size: 8, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.remoteBlue)
+                    }
+                    Text(postureMenuSubtitle)
+                        .font(.caption2)
+                        .foregroundStyle(postureCoach.evaluation.severity >= .warning
+                            ? postureMenuTint
+                            : .secondary)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                healthEntryButton(
+                    title: "Suivi en direct",
+                    systemImage: "video.fill"
+                ) {
+                    openHealthWindow {
+                        postureCoach.showExpandedLiveTracking()
+                    }
+                }
+                healthEntryButton(
+                    title: "Dashboard",
+                    systemImage: "chart.bar.xaxis"
+                ) {
+                    openHealthWindow {
+                        postureCoach.showHealthDashboard()
+                    }
+                }
+            }
+        }
+        .remoteCard()
+    }
+
+    private func healthEntryButton(
+        title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openHealthWindow(select destination: () -> Void) {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        destination()
+        openWindow(id: "posture-coach")
+        NotificationCenter.default.post(name: .postureCoachShowPreview, object: nil)
+    }
+
+    private var postureMenuTint: Color {
+        switch postureCoach.evaluation.severity {
+        case .correction: .red
+        case .warning: .orange
+        case .good: .green
+        case .unavailable: .gray
+        }
+    }
+
+    private var postureMenuIcon: String {
+        switch postureCoach.evaluation.severity {
+        case .correction: "exclamationmark.triangle.fill"
+        case .warning: "exclamationmark.circle.fill"
+        case .good, .unavailable: "figure.stand"
+        }
+    }
+
+    private var postureMenuSubtitle: String {
+        if postureCoach.evaluation.severity >= .warning {
+            return postureCoach.evaluation.primaryIssue?.message ?? "Mauvaise posture détectée"
+        }
+        if postureCoach.phase == .monitoring, postureCoach.isPreviewHidden {
+            return postureCoach.soundEnabled
+                ? "Analyse active · bulle masquée · son activé"
+                : "Analyse active · bulle masquée · son coupé"
+        }
+        if postureCoach.walkingSessions.isWalking {
+            return "Marche détectée · prêt à croiser avec Apple Santé"
+        }
+        return "Module optionnel · posture et marche analysées sur ce Mac"
     }
 
     private var nomadSection: some View {

@@ -4,6 +4,15 @@ All notable changes are documented here. The format follows Keep a Changelog and
 
 ## [Unreleased]
 
+### Windows and Linux companions
+
+- Connect the current iPhone app to a Mac, Windows PC or Linux/VPS desktop with the existing V4 protocol.
+- Download and install a companion from the new platform chooser in the iPhone app.
+- Keep pending controls and Global palette placement separate for each paired computer.
+- Add real X11/AT-SPI and Windows UI Automation input, pinned TLS pairing, screen capture and a supervised VPS desktop launcher.
+- Preserve the current Apple app identity, purchases, health integration and pointer improvements.
+
+
 ### Added
 
 - local protocol V2 and explicit approval for every new iPhone;
