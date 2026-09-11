@@ -16,7 +16,8 @@ from test_linux_integration import Client
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Requires an interactive Windows desktop")
 
 
-def test_real_windows_desktop_through_pinned_tls(tmp_path):
+@pytest.mark.parametrize("framework", ["winforms", "wpf"])
+def test_real_windows_desktop_through_pinned_tls(tmp_path, framework):
     script = tmp_path / "editor.ps1"
     script.write_text('''Add-Type -AssemblyName System.Windows.Forms
 $form = New-Object System.Windows.Forms.Form
@@ -38,6 +39,25 @@ $form.Controls.Add($text)
 $form.Controls.Add($password)
 $form.Add_Shown({$form.Activate(); $text.Focus(); $text.Select($text.TextLength, 0)})
 [System.Windows.Forms.Application]::Run($form)
+''')
+    if framework == "wpf":
+        script.write_text('''Add-Type -AssemblyName PresentationFramework
+$window = New-Object System.Windows.Window
+$window.Title = "Vibe Walkie Windows integration editor"
+$window.Width = 640
+$window.Height = 480
+$panel = New-Object System.Windows.Controls.StackPanel
+$text = New-Object System.Windows.Controls.TextBox
+$text.Text = "Initial "
+$text.Height = 300
+$text.AcceptsReturn = $true
+$password = New-Object System.Windows.Controls.PasswordBox
+$password.Height = 40
+$panel.Children.Add($text) | Out-Null
+$panel.Children.Add($password) | Out-Null
+$window.Content = $panel
+$window.Add_ContentRendered({$window.Activate(); $text.Focus(); $text.Select($text.Text.Length, 0)})
+$window.ShowDialog() | Out-Null
 ''')
     editor = subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -66,6 +86,13 @@ $form.Add_Shown({$form.Activate(); $text.Focus(); $text.Select($text.TextLength,
             assert started["type"] == "acknowledgement", started
             inserted = await client.request("insert_text", {"dictationID": dictation,
                 "targetToken": started["decoded"]["targetToken"]["token"], "text": "Bonjour été 🌍"})
+            assert inserted["decoded"].get("insertion", {}).get("verified") is True, inserted
+            # Read a selection after a surrogate pair and insert a newline.
+            # This detects UTF-16/Python-index confusion in both provider APIs.
+            started = await client.request("recording_started", {"locale": "fr-FR", "dictationID": dictation})
+            assert started["type"] == "acknowledgement", started
+            inserted = await client.request("insert_text", {"dictationID": dictation,
+                "targetToken": started["decoded"]["targetToken"]["token"], "text": "\nEncore café"})
             assert inserted["decoded"].get("insertion", {}).get("verified") is True, inserted
             await client.request("key_press", {"key": "tab"})
             await asyncio.sleep(0.1)

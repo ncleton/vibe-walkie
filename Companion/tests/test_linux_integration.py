@@ -76,7 +76,7 @@ class Client:
         self.writer.close()
         await self.writer.wait_closed()
         for _ in range(50):
-            if self.host.controller is None:
+            if getattr(self.host, "controller", None) is None:
                 break
             await asyncio.sleep(0.02)
 

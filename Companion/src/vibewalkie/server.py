@@ -53,10 +53,11 @@ class Companion:
     async def stop(self):
         if self.listener:
             self.listener.close()
-            await self.listener.wait_closed()
         for task in list(self.connections):
             task.cancel()
         await asyncio.gather(*list(self.connections), return_exceptions=True)
+        if self.listener:
+            await self.listener.wait_closed()
         if self.backend:
             await self.desktop("close")
         self.executor.shutdown(wait=True, cancel_futures=True)
