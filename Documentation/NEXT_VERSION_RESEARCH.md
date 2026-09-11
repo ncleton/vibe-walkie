@@ -251,9 +251,12 @@ suivi de validation ; elle ne justifie pas de présenter la compatibilité maté
 comme déjà certifiée.
 
 La page Apple des exigences Xcode consultée le 11 septembre liste Xcode 27 RC
-avec le SDK iOS 27 ; elle ne liste pas encore un SDK iOS 27.1. L’absence de ce SDK
-est donc aussi une dépendance de disponibilité à suivre avant la certification
-Duo, au-delà de la mise à niveau de la machine locale.[^24]
+avec le SDK iOS 27.[^24] La page dédiée au Duo annonce explicitement Xcode 27.1
+bêta pour plus tard dans le mois : aucun lien de téléchargement n’est encore
+proposé dans cette section. L’absence du SDK requis est donc une dépendance de
+disponibilité externe, au-delà de la mise à niveau de la machine locale. Dès sa
+publication, sélectionner ce Xcode avec `DEVELOPER_DIR`, lancer le script de
+compilation Duo puis les scénarios natifs du tableau ci-dessus.[^25]
 
 Les preuves effectivement obtenues et les points restant à vérifier sont
 consignés dans [le dossier de validation](Validation/next-version/README.md).
@@ -288,3 +291,4 @@ disponibilité dans l’environnement de développement est vérifiée séparém
 [^22]: Microsoft Learn, [SendMessageTimeoutW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendmessagetimeoutw), délais et transport des messages système.
 [^23]: Microsoft Learn, [Understanding Threading Issues](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading), utilisation du modèle COM MTA.
 [^24]: Apple Developer, [SDKs and system requirements](https://developer.apple.com/xcode/system-requirements), versions disponibles consultées le 11 septembre 2026.
+[^25]: Apple Developer, [Get ready for iPhone Duo](https://developer.apple.com/iphone-duo/), section « Xcode 27.1 beta », disponibilité annoncée « Coming later this month », consultée le 11 septembre 2026.

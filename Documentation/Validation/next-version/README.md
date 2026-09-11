@@ -56,7 +56,8 @@ les données d’origine et continue de signaler l’erreur au prochain essai.
 
 - Compiler `scripts/build-duo.sh` avec le SDK iOS 27.1 ou supérieur, puis tester
   les régions de division réelles sur le simulateur Duo. Le SDK local est 26.2 ;
-  la page Apple consultée liste encore Xcode 27 RC et iOS 27.
+  [Apple annonce Xcode 27.1 bêta pour plus tard dans le mois](https://developer.apple.com/iphone-duo/)
+  sur la page Duo consultée le 11 septembre, sans lien de téléchargement.
   La commande Apple `xcodebuild -downloadPlatform iOS -buildVersion 27.1`
   répond également le 11 septembre : `iOS 27.1 is not available for download.`
 - Vérifier une ouverture/fermeture pendant une dictée réelle, les différentes
