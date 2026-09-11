@@ -217,7 +217,16 @@ class WindowsDesktop:
         self._type_unicode(value)
         expected = (before[:start] + value + before[end:]).replace("\r\n", "\n").replace("\r", "\n")
         for _ in range(20):
-            after, _, _ = self.text_state(current["element"])
+            try:
+                after, _, _ = self.text_state(current["element"])
+            except RemoteError as error:
+                if error.code != "target_changed":
+                    raise
+                # SendInput is asynchronous: text and selection can advance
+                # between reads while the editor consumes our one event batch.
+                # Retry the observation only; never send the batch again.
+                time.sleep(0.05)
+                continue
             if after.replace("\r\n", "\n").replace("\r", "\n") == expected:
                 return {"method": "unicode_events", "verified": True, "applicationName": current["name"]}
             time.sleep(0.05)

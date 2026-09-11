@@ -19,6 +19,23 @@ export NO_AT_BRIDGE=0
 export GTK_MODULES=atk-bridge
 openbox &
 WINDOW_MANAGER_PID=$!
-trap 'kill "$WINDOW_MANAGER_PID" 2>/dev/null || true' EXIT
 xfce4-terminal --disable-server --title='Vibe Walkie VPS' &
-vibewalkie serve "$@"
+TERMINAL_PID=$!
+vibewalkie serve "$@" &
+COMPANION_PID=$!
+cleanup() {
+  for pid in "$COMPANION_PID" "$TERMINAL_PID" "$WINDOW_MANAGER_PID"; do
+    if kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null || true; fi
+  done
+  wait "$COMPANION_PID" "$TERMINAL_PID" "$WINDOW_MANAGER_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 0' INT TERM
+# A missing terminal or window manager is an unusable desktop, even when TLS
+# still responds. End the complete session so a user service can restart it.
+set +e
+wait -n "$COMPANION_PID" "$TERMINAL_PID" "$WINDOW_MANAGER_PID"
+status=$?
+set -e
+echo "The VPS desktop session ended (component exit $status). Check the preceding terminal, Openbox or companion error and restart the launcher." >&2
+exit 1

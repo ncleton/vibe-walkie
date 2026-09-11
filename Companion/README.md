@@ -50,8 +50,26 @@ For a VPS without a desktop, activate the same virtualenv and run:
 
 Xvfb provides a 1440 × 900 display, Openbox manages windows and xfce4-terminal
 opens the actual user shell. The session remains alive while the launcher is
-running, independently of the iPhone connection. Run it under a user service
-or persistent terminal session if it must survive the SSH session ending.
+running, independently of the iPhone connection. To keep it running after SSH
+disconnects, install the supplied systemd user service after the virtualenv:
+
+```bash
+install -m 755 Companion/scripts/start-vps-desktop.sh ~/.local/share/vibewalkie/start-vps-desktop
+mkdir -p ~/.config/systemd/user
+install -m 644 Companion/systemd/vibewalkie-vps.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now vibewalkie-vps.service
+sudo loginctl enable-linger "$USER"
+journalctl --user -u vibewalkie-vps.service -f
+```
+
+Stop an existing foreground launcher before starting the service. The unit uses
+the connected Tailscale address. If Tailscale or a desktop component fails, it
+logs the cause and retries with a limit; after fixing it, use
+`systemctl --user reset-failed vibewalkie-vps` and
+`systemctl --user restart vibewalkie-vps`. Stop it with
+`systemctl --user stop vibewalkie-vps`.
+
 Do not start it as root: remote commands have the desktop user's permissions.
 
 The companion deliberately refuses a native Wayland session. Wayland support
@@ -100,7 +118,8 @@ identity files produce an explicit error and are never replaced silently.
 
 The companion checks the focused element and selection again at dictation
 insertion and consumes its token even on failure. Password fields reject dictation.
-Linux dictation currently requires an AT-SPI EditableText field; terminal input is
+Windows verifies UI Automation TextPattern selections and standard Win32/WinForms
+Edit selections. Linux dictation currently requires an AT-SPI EditableText field; terminal input is
 available through the manual keyboard. A field that cannot confirm insertion
 returns an error rather than claiming text was written. Manual input reports the
 actual input-event method and its verification status separately.

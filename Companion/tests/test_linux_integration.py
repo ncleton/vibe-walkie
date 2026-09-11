@@ -204,3 +204,33 @@ def test_real_desktop_through_pinned_tls(tmp_path):
             await host.stop()
             state.close()
     asyncio.run(exercise())
+
+
+def test_unapproved_device_cannot_control_real_desktop(tmp_path):
+    async def exercise():
+        from vibewalkie.linux import LinuxDesktop
+        state = State(tmp_path)
+        host = Companion(state, {"hostName": "Approval Linux", "hostPlatform": "linux", "serviceName": "Approval"}, LinuxDesktop)
+        try:
+            listener = await host.start("127.0.0.1", 0)
+            port = listener.sockets[0].getsockname()[1]
+            unknown = Client(host, port)
+            assert (await unknown.connect(pairing=False))["decoded"]["code"] == "not_paired"
+            await unknown.close()
+            waiting = Client(host, port)
+            pending = await waiting.connect(approve=False)
+            # A correctly signed QR request is still unable to move the pointer
+            # or start a screen stream until the operator approves it.
+            await waiting.send("pointer_drag", {"phase": "began", "deltaX": 0, "deltaY": 0})
+            await waiting.send("screen_stream_request", {"enabled": True, "maxWidth": 640, "framesPerSecond": 4, "jpegQuality": 0.4})
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(read_envelope(waiting.reader), 0.4)
+            assert host.controller is None and not host.backend.dragging
+            state.decide(pending["decoded"]["requestID"], pending["decoded"]["confirmationCode"], False)
+            assert (await read_envelope(waiting.reader))["decoded"]["code"] == "pairing_denied"
+            assert state.peer(waiting.peer_id) is None
+            await waiting.close()
+        finally:
+            await host.stop()
+            state.close()
+    asyncio.run(exercise())
