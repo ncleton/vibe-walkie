@@ -1,6 +1,16 @@
 import SwiftUI
 import RemoteCore
 
+@MainActor
+enum RemoteScreenIdlePolicy {
+    private static var owners = Set<UUID>()
+
+    static func setActive(_ active: Bool, owner: UUID) {
+        if active { owners.insert(owner) } else { owners.remove(owner) }
+        UIApplication.shared.isIdleTimerDisabled = !owners.isEmpty
+    }
+}
+
 /// Both children retain their identity across fold, resize and keyboard changes.
 struct RemoteWorkspaceLayout: Layout {
     let geometry: WorkspaceGeometry
@@ -91,6 +101,12 @@ struct RemoteWorkspaceScreen: View {
         .onChange(of: active) { old, new in
             if old && !new { client.stopScreenStream(owner: streamOwner) }
         }
-        .onDisappear { if enabled { client.stopScreenStream(owner: streamOwner) } }
+        .onChange(of: active, initial: true) { _, new in
+            RemoteScreenIdlePolicy.setActive(new, owner: streamOwner)
+        }
+        .onDisappear {
+            RemoteScreenIdlePolicy.setActive(false, owner: streamOwner)
+            if enabled { client.stopScreenStream(owner: streamOwner) }
+        }
     }
 }

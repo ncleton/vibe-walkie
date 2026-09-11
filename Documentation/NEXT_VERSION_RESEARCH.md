@@ -188,6 +188,15 @@ et la sélection sont capturés au début puis contrôlés au moment de l’inse
 Une comparaison du texte après l’envoi apporte la preuve utile pour la
 confirmation sur l’iPhone.[^17][^18]
 
+Les champs Edit Win32 et WinForms anciens disposent aussi d’un contrat natif :
+`EM_GETSEL` donne les positions de sélection en unités UTF-16. Le compagnon le
+prend en charge avec une lecture de texte bornée et un délai de réponse, sans
+remplacer la vérification par une simple confirmation d’envoi. Les messages
+système concernés sont transportés entre processus par Windows.[^21][^22]
+Les appels UI Automation sont exécutés sur un thread MTA dédié, conformément à
+la recommandation Microsoft pour éviter les problèmes de messages et de
+réentrance.[^23]
+
 La capture initiale s’appuie sur MSS et l’encodage JPEG déjà compris par le client
 iPhone. MSS documente la capture de moniteurs et son utilisation avec Pillow.
 Cela évite de modifier simultanément le transport et tous les décodeurs. Les
@@ -241,6 +250,14 @@ le SDK approprié n’est pas sélectionné. Cette limite doit rester visible da
 suivi de validation ; elle ne justifie pas de présenter la compatibilité matérielle
 comme déjà certifiée.
 
+La page Apple des exigences Xcode consultée le 11 septembre liste Xcode 27 RC
+avec le SDK iOS 27 ; elle ne liste pas encore un SDK iOS 27.1. L’absence de ce SDK
+est donc aussi une dépendance de disponibilité à suivre avant la certification
+Duo, au-delà de la mise à niveau de la machine locale.[^24]
+
+Les preuves effectivement obtenues et les points restant à vérifier sont
+consignés dans [le dossier de validation](Validation/next-version/README.md).
+
 ## Sources
 
 Sources consultées le 11 septembre 2026. Les versions de SDK et dates de
@@ -267,3 +284,7 @@ disponibilité dans l’environnement de développement est vérifiée séparém
 [^18]: Microsoft Learn, [IUIAutomationElement.CurrentIsPassword](https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/nf-uiautomationclient-iuiautomationelement-get_currentispassword), mise à jour 5 octobre 2021.
 [^19]: Python MSS, [Usage](https://python-mss.readthedocs.io/stable/usage.html), documentation stable consultée ; version utilisée fixée dans `Companion/pyproject.toml`.
 [^20]: Tailscale, [Grants syntax](https://tailscale.com/docs/reference/syntax/grants), dernière validation indiquée 5 janvier 2026.
+[^21]: Microsoft Learn, [EM_GETSEL](https://learn.microsoft.com/en-us/windows/win32/controls/em-getsel), sélection native des contrôles Edit.
+[^22]: Microsoft Learn, [SendMessageTimeoutW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendmessagetimeoutw), délais et transport des messages système.
+[^23]: Microsoft Learn, [Understanding Threading Issues](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading), utilisation du modèle COM MTA.
+[^24]: Apple Developer, [SDKs and system requirements](https://developer.apple.com/xcode/system-requirements), versions disponibles consultées le 11 septembre 2026.

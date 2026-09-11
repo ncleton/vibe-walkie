@@ -66,11 +66,11 @@ struct RemoteScreenView: View {
             // Une télécommande posée près du Mac ne doit pas verrouiller son
             // écran en plein contrôle : iOS suspendrait alors le réseau et le
             // flux semblerait « couper » au bout du délai de veille.
-            UIApplication.shared.isIdleTimerDisabled = true
+            RemoteScreenIdlePolicy.setActive(true, owner: streamOwner)
         }
         .onDisappear {
             AppOrientationPolicy.setRemoteScreenActive(false)
-            UIApplication.shared.isIdleTimerDisabled = false
+            RemoteScreenIdlePolicy.setActive(false, owner: streamOwner)
             client.stopScreenStream(owner: streamOwner)
         }
         .sheet(isPresented: $showControlConfigurator) {

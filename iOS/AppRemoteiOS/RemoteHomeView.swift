@@ -53,6 +53,11 @@ struct RemoteHomeView: View {
 
                         controlPanel
                     }
+                    .onChange(of: geometry.isExpanded) { _, _ in
+                        // Opening or closing returns to the layout for that
+                        // screen while preserving the existing dictation owner.
+                        showScreen = false
+                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 8)
