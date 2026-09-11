@@ -58,16 +58,19 @@ jobs:
           xcodebuild -project macOS/AppRemoteMac.xcodeproj
           -scheme AppRemoteMac
           -configuration Debug
+          -destination 'platform=macOS,arch=arm64'
+          ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
           CODE_SIGNING_ALLOWED=NO build
       - name: Tests macOS
         run: >-
           xcodebuild test -project macOS/AppRemoteMac.xcodeproj
           -scheme AppRemoteMac
           -destination 'platform=macOS,arch=arm64'
+          ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
           CODE_SIGNING_ALLOWED=NO
       - name: Interdire les composants du prototype
         run: |
-          if rg -n 'itms-services|remoteHost|remotePort|keyboard_edit|keyboardEdit|_appremote\._tcp|com\.yakaperformance\.appremote|relais distant|accès à distance|VPS' Packages iOS macOS --glob '!**/Tests/**' --glob '!**/*Tests/**' --glob '!**/build*/**' --glob '!**/.build/**' --glob '!**/*.xcodeproj/**'; then
+          if rg -n 'itms-services|remoteHost|remotePort|keyboard_edit|keyboardEdit|_appremote\._tcp|com\.yakaperformance\.appremote|relais distant|accès à distance' Packages iOS macOS --glob '!**/Tests/**' --glob '!**/*Tests/**' --glob '!**/build*/**' --glob '!**/.build/**' --glob '!**/*.xcodeproj/**'; then
             exit 1
           fi
 

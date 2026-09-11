@@ -1,0 +1,17 @@
+[Unit]
+Description=Vibe Walkie private VPS desktop
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/share/vibewalkie/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart="%h/.local/share/vibewalkie/start-vps-desktop"
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=15
+UMask=0077
+
+[Install]
+WantedBy=default.target

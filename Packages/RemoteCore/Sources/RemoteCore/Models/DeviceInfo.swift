@@ -32,6 +32,7 @@ public struct VibeWalkieInfo: Sendable {
 public enum HostPlatform: String, Codable, Sendable, CaseIterable {
     case macOS = "macos"
     case windows
+    case linux
 }
 
 public enum ClientPlatform: String, Codable, Sendable, CaseIterable {

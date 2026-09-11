@@ -57,7 +57,7 @@ struct TargetPill: View {
     private var title: String {
         switch client.state {
         case .ready:
-            return activeApplication?.name ?? client.state.hostName ?? "Mac"
+            return activeApplication?.name ?? client.state.hostName ?? "Vibe Walkie"
         case .connecting(let name):
             return name
         case .pairing(let name, _):

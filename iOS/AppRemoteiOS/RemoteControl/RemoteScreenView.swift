@@ -30,6 +30,7 @@ struct RemoteScreenView: View {
     @AppStorage("screenQuality") private var screenQuality = 0.45
     @AppStorage("screenFrameRate") private var screenFrameRate = 10.0
     @AppStorage(RemoteScreenPTTSide.storageKey) private var pttSide: RemoteScreenPTTSide = .right
+    @State private var streamOwner = UUID()
     @State private var showKeyboard = false
     @State private var showGlobalPalette = false
     @State private var showControlConfigurator = false
@@ -65,12 +66,12 @@ struct RemoteScreenView: View {
             // Une télécommande posée près du Mac ne doit pas verrouiller son
             // écran en plein contrôle : iOS suspendrait alors le réseau et le
             // flux semblerait « couper » au bout du délai de veille.
-            UIApplication.shared.isIdleTimerDisabled = true
+            RemoteScreenIdlePolicy.setActive(true, owner: streamOwner)
         }
         .onDisappear {
             AppOrientationPolicy.setRemoteScreenActive(false)
-            UIApplication.shared.isIdleTimerDisabled = false
-            client.stopScreenStream()
+            RemoteScreenIdlePolicy.setActive(false, owner: streamOwner)
+            client.stopScreenStream(owner: streamOwner)
         }
         .sheet(isPresented: $showControlConfigurator) {
             NavigationStack {
@@ -210,7 +211,8 @@ struct RemoteScreenView: View {
             client.startScreenStream(
                 maxWidth: profile.maxWidth,
                 framesPerSecond: profile.framesPerSecond,
-                jpegQuality: profile.jpegQuality
+                jpegQuality: profile.jpegQuality,
+                owner: streamOwner
             )
         }
 

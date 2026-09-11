@@ -152,6 +152,8 @@ enum AppL10n {
 
     static func remoteError(_ code: RemoteErrorCode) -> String {
         switch code {
+        case .invalidControlConfiguration:
+            text("ios.workspace.configuration.invalid")
         case .versionMismatch:
             text("ios.the.vibe.walkie.versions.do.not.match.update.the.iphone.c095c26")
         case .unsupportedCapability, .inputUnavailable, .screenUnavailable, .activationDenied:

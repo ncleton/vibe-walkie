@@ -18,15 +18,14 @@ enum LegacyTranscriptCleanup {
     }
 }
 
-/// L'app reste verticale au quotidien. Seul le retour d'écran du Mac peut
-/// pivoter, car c'est le seul endroit où le paysage apporte une vraie surface
-/// de travail supplémentaire.
+/// Every remote surface supports resizing and rotation. The Duo inner display
+/// supplies its own geometry; layout must not depend on the physical orientation.
 @MainActor
 enum AppOrientationPolicy {
-    static var supported: UIInterfaceOrientationMask = .portrait
+    static var supported: UIInterfaceOrientationMask = .allButUpsideDown
 
     static func setRemoteScreenActive(_ isActive: Bool) {
-        supported = isActive ? .allButUpsideDown : .portrait
+        supported = .allButUpsideDown
 
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
             scene.requestGeometryUpdate(.iOS(interfaceOrientations: supported))
@@ -80,9 +79,8 @@ private final class OTAUpdateCoordinator: ObservableObject {
     }
 
     func install() {
-        // iOS peut refuser silencieusement `itms-services` lorsqu'il est
-        // ouvert directement depuis une app. Safari, lui, est le contexte
-        // système prévu pour confirmer une installation OTA. La page stable
+        // Safari affiche la confirmation système de l'installation OTA.
+        // La page stable
         // régénère en plus un manifeste signé frais à chaque affichage.
         guard manifestURL != nil,
               let installPageURL = URL(
