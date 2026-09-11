@@ -15,6 +15,7 @@
 		314077642B1100978296F880 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30F11EBACBBF5156D9F4ACA1 /* SettingsSheet.swift */; };
 		322CC270C9C4E9AB9F47AF5D /* RemoteWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A9086C478335AC0CE4E95FB /* RemoteWorkspace.swift */; };
 		37AACFEAC8AB8DD92E22801A /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3891F57B111648029F8C1544 /* HapticFeedback.swift */; };
+		5F8A3A641B78611B76E79AB0 /* CompanionIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85260DA192BA13C970A86755 /* CompanionIntegrationTests.swift */; };
 		696B10390E8BA94C43696E4D /* AppSwitcherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAF4414EF6FB8E3D3561A0A7 /* AppSwitcherView.swift */; };
 		6B2E0ED3EAE1D9207A81270B /* WorkspaceViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25289425CB118424B47CEEA1 /* WorkspaceViewTests.swift */; };
 		6C17056F3C3E9BA2BDA47999 /* AppleSpeechAnalyzerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B0E3618DB6F6ED4A2A80FB /* AppleSpeechAnalyzerEngine.swift */; };
@@ -100,6 +101,7 @@
 		6BE015561F8522A4C77BA1DD /* RemoteHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHomeView.swift; sourceTree = "<group>"; };
 		75B0E3618DB6F6ED4A2A80FB /* AppleSpeechAnalyzerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechAnalyzerEngine.swift; sourceTree = "<group>"; };
 		7F706F54092076BEA79B78BC /* AppRemoteiOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AppRemoteiOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		85260DA192BA13C970A86755 /* CompanionIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionIntegrationTests.swift; sourceTree = "<group>"; };
 		89CA769161E0F0734B7E27BA /* HostControlConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostControlConfigurationStore.swift; sourceTree = "<group>"; };
 		8C66D8FF7563BD6F2C097857 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		9A9086C478335AC0CE4E95FB /* RemoteWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWorkspace.swift; sourceTree = "<group>"; };
@@ -136,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				C3844B1B998E34A8E18A83B8 /* CommercializationConfigurationTests.swift */,
+				85260DA192BA13C970A86755 /* CompanionIntegrationTests.swift */,
 				E3C21643286EE581CB8747DB /* DictationControllerTests.swift */,
 				25289425CB118424B47CEEA1 /* WorkspaceViewTests.swift */,
 			);
@@ -497,6 +500,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1AFB51F6855DC4B45CCCE4AF /* CommercializationConfigurationTests.swift in Sources */,
+				5F8A3A641B78611B76E79AB0 /* CompanionIntegrationTests.swift in Sources */,
 				991D4955B618B8958754773C /* DictationControllerTests.swift in Sources */,
 				6B2E0ED3EAE1D9207A81270B /* WorkspaceViewTests.swift in Sources */,
 			);
