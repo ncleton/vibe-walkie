@@ -29,7 +29,7 @@ valide pas le réseau Tailscale d’un VPS déployé chez un hébergeur.
 
 ## Rendus et captures
 
-Les quatre rendus iOS proviennent de la vue `RemoteHomeView`, avec son véritable
+Les cinq rendus iOS proviennent de la vue `RemoteHomeView`, avec son véritable
 état déconnecté. Ce sont des tests de disposition aux tailles indiquées, sans
 image distante inventée. Ils ne proviennent pas d’un simulateur Duo.
 
@@ -39,6 +39,7 @@ image distante inventée. Ils ne proviennent pas d’un simulateur Duo.
 | Fermée, paysage | 620 × 420, classe compacte | [Voir](closed-landscape.png) |
 | Ouverte, paysage | 900 × 700, classe régulière | [Voir](open-landscape.png) |
 | Ouverte, portrait | 700 × 900, classe régulière | [Voir](open-portrait.png) |
+| Ouverte, portrait étroit | 620 × 880, classe régulière | [Voir](open-narrow-portrait.png) |
 | Bureau Linux réel | Flux TLS reçu, JPEG 640 × 400 | [Voir](linux-live-screen.png) |
 | Terminal du lanceur VPS | Flux TLS reçu, JPEG 640 × 400 | [Voir](vps-live-screen.png) |
 | Windows, WinForms | Flux TLS reçu, éditeur réel | [Voir](windows-winforms-live.png) |
