@@ -79,9 +79,8 @@ private final class OTAUpdateCoordinator: ObservableObject {
     }
 
     func install() {
-        // iOS peut refuser silencieusement `itms-services` lorsqu'il est
-        // ouvert directement depuis une app. Safari, lui, est le contexte
-        // système prévu pour confirmer une installation OTA. La page stable
+        // Safari affiche la confirmation système de l'installation OTA.
+        // La page stable
         // régénère en plus un manifeste signé frais à chaque affichage.
         guard manifestURL != nil,
               let installPageURL = URL(
