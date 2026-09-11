@@ -144,19 +144,25 @@ do
     "$(basename "$guarded_release") peut publier sans vérifier le curseur."
 done
 
-SIMULATOR_ID="$(xcrun simctl list devices available -j | /usr/bin/python3 -c '
-import json, sys
-devices = json.load(sys.stdin)["devices"]
-for runtime, candidates in devices.items():
-    if ".SimRuntime.iOS-" not in runtime:
+# Ask the selected Xcode and scheme for eligible destinations. simctl also
+# lists installed runtimes older than this app's deployment target.
+SIMULATOR_ID="$(xcodebuild \
+  -project "$ROOT_DIR/iOS/AppRemoteiOS.xcodeproj" \
+  -scheme AppRemoteiOS -showdestinations 2>/dev/null | /usr/bin/python3 -c '
+import re, sys
+output = sys.stdin.read().split("Ineligible destinations", 1)[0]
+candidates = []
+for line in output.splitlines():
+    if "platform:iOS Simulator" not in line:
         continue
-    for device in candidates:
-        if device.get("isAvailable"):
-            print(device["udid"])
-            raise SystemExit
+    match = re.search(r"id:([0-9A-Fa-f-]{36})(?:,|\s)", line)
+    if match:
+        candidates.append(("name:iPhone" not in line, match.group(1)))
+if candidates:
+    print(sorted(candidates, key=lambda item: item[0])[0][1])
 ')"
 if [[ -z "$SIMULATOR_ID" ]]; then
-  echo "Fluidité curseur non vérifiée : aucun simulateur iOS disponible." >&2
+  echo "Fluidité curseur non vérifiée : aucun simulateur iOS compatible avec ce projet. Installez son runtime dans Xcode." >&2
   exit 69
 fi
 
