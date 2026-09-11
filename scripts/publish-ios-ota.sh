@@ -2,9 +2,18 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+CREDENTIALS_FILE="${ASC_CREDENTIALS_FILE:-$HOME/Library/Application Support/Vibe Walkie Release Tools/App Store Connect/credentials.env}"
+if [[ -z "${ASC_KEY_PATH:-}" && -f "$CREDENTIALS_FILE" ]]; then
+  # Les identifiants restent hors du dépôt. Ils permettent à Xcode de créer
+  # un profil Ad Hoc à jour lorsque les capabilities (HealthKit, par exemple)
+  # changent, sans dépendre d'une session Apple interactive.
+  # shellcheck disable=SC1090
+  source "$CREDENTIALS_FILE"
+fi
 VERSION="${VERSION:-1.0.0}"
 BUILD="${BUILD:-$(date -u +%Y%m%d%H%M)}"
 NOTES="${NOTES:-Améliorations de stabilité et d’expérience.}"
+DEVELOPMENT_TEAM="${APPLE_TEAM_ID:-${DEVELOPMENT_TEAM:-99QF92KRR7}}"
 VPS_HOST="${VPS_HOST:-yaka-vps}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://app-remote.92.222.247.135.sslip.io}"
 DEVICE_UDID="${DEVICE_UDID:-00008120-001260191462201E}"
@@ -12,6 +21,19 @@ BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build/ios-ota-$BUILD.noindex}"
 ARCHIVE_PATH="$BUILD_DIR/VibeWalkie.xcarchive"
 EXPORT_DIR="$BUILD_DIR/export"
 REMOTE_IPA="/tmp/vibe-walkie-$BUILD.ipa"
+INSTALL_ICON="$ROOT_DIR/iOS/AppRemoteiOS/Assets.xcassets/VibeWalkieAppIcon.appiconset/VibeWalkieAppIcon-1024.png"
+REMOTE_ICON="/tmp/vibe-walkie-$BUILD-icon.png"
+MANUAL_EXPORT_OPTIONS="$ROOT_DIR/Distribution/ExportOptions-OTA-Manual.plist"
+if [[ -n "${ASC_KEY_PATH:-}" && -n "${ASC_KEY_ID:-}" && -n "${ASC_ISSUER_ID:-}" ]]; then
+  # Une clé App Store Connect permet à Xcode de récupérer un profil à jour
+  # avec toutes les capabilities de la build (HealthKit notamment).
+  DEFAULT_EXPORT_OPTIONS="$ROOT_DIR/Distribution/ExportOptions-OTA.plist"
+elif [[ -f "$MANUAL_EXPORT_OPTIONS" ]]; then
+  DEFAULT_EXPORT_OPTIONS="$MANUAL_EXPORT_OPTIONS"
+else
+  DEFAULT_EXPORT_OPTIONS="$ROOT_DIR/Distribution/ExportOptions-OTA.plist"
+fi
+EXPORT_OPTIONS_PLIST="${EXPORT_OPTIONS_PLIST:-$DEFAULT_EXPORT_OPTIONS}"
 
 usage() {
   cat <<'USAGE'
@@ -22,6 +44,7 @@ Variables facultatives :
   BUILD=202609031330
   NOTES="Correctifs…"
   DEVICE_UDID=00008120-001260191462201E
+  EXPORT_OPTIONS_PLIST=Distribution/ExportOptions-OTA-Manual.plist
 USAGE
 }
 
@@ -46,13 +69,26 @@ for command in xcodebuild xcodegen unzip codesign security ssh scp curl plutil s
   }
 done
 test -f "$ROOT_DIR/Localization/locale-manifest.json"
-test -f "$ROOT_DIR/Distribution/ExportOptions-OTA.plist"
+test -f "$EXPORT_OPTIONS_PLIST"
+test -f "$INSTALL_ICON"
+
+authentication_arguments=()
+if [[ -n "${ASC_KEY_PATH:-}" && -n "${ASC_KEY_ID:-}" && -n "${ASC_ISSUER_ID:-}" ]]; then
+  authentication_arguments+=(
+    -authenticationKeyPath "$ASC_KEY_PATH"
+    -authenticationKeyID "$ASC_KEY_ID"
+    -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+  )
+fi
 
 mkdir -p "$BUILD_DIR"
 (
   cd "$ROOT_DIR/iOS"
   xcodegen generate
 )
+
+POINTER_FLUIDITY_DERIVED_DATA="$BUILD_DIR/PointerFluidityDerivedData.noindex" \
+  "$ROOT_DIR/scripts/verify-pointer-fluidity.sh"
 
 echo "→ Archive iPhone OTA $VERSION ($BUILD)"
 xcodebuild archive \
@@ -64,18 +100,24 @@ xcodebuild archive \
   -derivedDataPath "$BUILD_DIR/DerivedData.noindex" \
   MARKETING_VERSION="$VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD" \
-  DEVELOPMENT_TEAM=7XX6KYD3MY \
+  DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
   CODE_SIGN_STYLE=Automatic \
   "SWIFT_ACTIVE_COMPILATION_CONDITIONS=\$(inherited) OTA_UPDATES" \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates \
+  "${authentication_arguments[@]}"
 
 echo "→ Export Ad Hoc"
 rm -rf "$EXPORT_DIR"
-xcodebuild -exportArchive \
-  -archivePath "$ARCHIVE_PATH" \
-  -exportPath "$EXPORT_DIR" \
-  -exportOptionsPlist "$ROOT_DIR/Distribution/ExportOptions-OTA.plist" \
-  -allowProvisioningUpdates
+export_arguments=(
+  -exportArchive
+  -archivePath "$ARCHIVE_PATH"
+  -exportPath "$EXPORT_DIR"
+  -exportOptionsPlist "$EXPORT_OPTIONS_PLIST"
+)
+if [[ "$EXPORT_OPTIONS_PLIST" != "$MANUAL_EXPORT_OPTIONS" ]]; then
+  export_arguments+=(-allowProvisioningUpdates)
+fi
+xcodebuild "${export_arguments[@]}" "${authentication_arguments[@]}"
 
 IPA_PATH="$(find "$EXPORT_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
 [[ -n "$IPA_PATH" ]] || {
@@ -93,16 +135,18 @@ APP_PATH="$(find "$VERIFY_DIR/Payload" -maxdepth 1 -type d -name '*.app' -print 
   exit 65
 }
 
+EXPECTED_APP_ID="${EXPECTED_APP_ID:-app.vibewalkie}"
+EXPECTED_EXTENSION_ID="${EXPECTED_EXTENSION_ID:-app.vibewalkie.controls}"
 ACTUAL_BUNDLE="$(plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Info.plist")"
 ACTUAL_BUILD="$(plutil -extract CFBundleVersion raw -o - "$APP_PATH/Info.plist")"
-[[ "$ACTUAL_BUNDLE" == "com.nicolascleton.viberemote" && "$ACTUAL_BUILD" == "$BUILD" ]] || {
+[[ "$ACTUAL_BUNDLE" == "$EXPECTED_APP_ID" && "$ACTUAL_BUILD" == "$BUILD" ]] || {
   echo "Identité IPA invalide : $ACTUAL_BUNDLE ($ACTUAL_BUILD)." >&2
   exit 65
 }
 
 EXTENSION_PLIST="$APP_PATH/PlugIns/Vibe Walkie Controls.appex/Info.plist"
 ACTUAL_EXTENSION_BUNDLE="$(plutil -extract CFBundleIdentifier raw -o - "$EXTENSION_PLIST")"
-[[ "$ACTUAL_EXTENSION_BUNDLE" == "com.nicolascleton.viberemote.controls" ]] || {
+[[ "$ACTUAL_EXTENSION_BUNDLE" == "$EXPECTED_EXTENSION_ID" ]] || {
   echo "Bundle de l’extension invalide : $ACTUAL_EXTENSION_BUNDLE." >&2
   exit 65
 }
@@ -122,14 +166,16 @@ codesign --verify --deep --strict "$APP_PATH"
 NOTES_B64="$(printf '%s' "$NOTES" | base64 | tr -d '\n')"
 echo "→ Publication chiffrée vers $VPS_HOST"
 scp -q "$IPA_PATH" "$VPS_HOST:$REMOTE_IPA"
-ssh "$VPS_HOST" bash -s -- "$REMOTE_IPA" "$VERSION" "$BUILD" "$NOTES_B64" "$PUBLIC_BASE_URL" <<'REMOTE'
+scp -q "$INSTALL_ICON" "$VPS_HOST:$REMOTE_ICON"
+ssh "$VPS_HOST" bash -s -- "$REMOTE_IPA" "$REMOTE_ICON" "$VERSION" "$BUILD" "$NOTES_B64" "$PUBLIC_BASE_URL" <<'REMOTE'
 set -euo pipefail
 artifact="$1"
-version="$2"
-build="$3"
-notes_b64="$4"
-public_base_url="$5"
-cleanup() { rm -f "$artifact"; }
+icon_artifact="$2"
+version="$3"
+build="$4"
+notes_b64="$5"
+public_base_url="$6"
+cleanup() { rm -f "$artifact" "$icon_artifact"; }
 trap cleanup EXIT
 set -a
 source /opt/app-remote/.env
@@ -143,6 +189,7 @@ curl --fail --silent --show-error \
   --header "X-Release-Force: false" \
   --header 'Content-Type: application/octet-stream' \
   --data-binary "@$artifact"
+install -m 0644 "$icon_artifact" /opt/app-remote/data/ios/icon.png
 REMOTE
 
 echo

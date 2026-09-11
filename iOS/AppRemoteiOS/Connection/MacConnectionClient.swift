@@ -2,6 +2,29 @@ import Foundation
 import Network
 import CryptoKit
 import RemoteCore
+import UIKit
+
+struct PointerMoveAccumulator: Equatable {
+    private(set) var deltaX = 0.0
+    private(set) var deltaY = 0.0
+
+    var isEmpty: Bool { deltaX == 0 && deltaY == 0 }
+
+    mutating func append(deltaX: Double, deltaY: Double) {
+        self.deltaX += deltaX
+        self.deltaY += deltaY
+    }
+
+    mutating func drain() -> PointerMovePayload {
+        let payload = PointerMovePayload(deltaX: deltaX, deltaY: deltaY)
+        self = .init()
+        return payload
+    }
+}
+
+private struct PreparedScreenImage: @unchecked Sendable {
+    let image: UIImage
+}
 
 /// Client réseau de l'iPhone : découverte, TLS épinglé, authentification.
 @MainActor
@@ -13,13 +36,15 @@ final class HostConnectionClient: ObservableObject {
     @Published private(set) var screenCaptureReady = true
     @Published private(set) var connectedHostPlatform: HostPlatform = .macOS
     @Published private(set) var hostCapabilities: Set<HostCapability> = Set(HostCapability.fullControl)
-    @Published private(set) var latestScreenFrame: ScreenFramePayload?
-    @Published private(set) var lastScreenFrameAt: Date?
+    private(set) var latestScreenFrame: ScreenFramePayload?
+    private(set) var lastScreenFrameAt: Date?
+    @Published private(set) var latestScreenImage: UIImage?
     @Published private(set) var screenStreamStatus = ScreenStreamStatusPayload(
         isStreaming: false,
         permissionGranted: true
     )
     @Published private(set) var controlConfiguration: ControlConfiguration
+    @Published private(set) var globalButtonSlotIDs: [String?]
     @Published private(set) var connectionRoute: ConnectionRoute = .local
     @Published private(set) var connectionIsExpensive = false
     @Published private(set) var connectionIsConstrained = false
@@ -61,6 +86,14 @@ final class HostConnectionClient: ObservableObject {
     private var connectionAttempts: [ObjectIdentifier: ConnectionAttempt] = [:]
     private var startedAttemptKinds: Set<AttemptKind> = []
     private var lastLocalPreferenceAttemptAt: Date?
+    private var pendingPointerMove = PointerMoveAccumulator()
+    private var pointerMoveSendInFlight = false
+    private var pointerMoveMessageID: UUID?
+    private var pointerMoveInFlightPayload: PointerMovePayload?
+    private var acknowledgedPointerMovesInFlight: [UUID: PointerMovePayload] = [:]
+    private var acknowledgedPointerMovesEnabled = false
+    private let maximumAcknowledgedPointerMovesInFlight = 1
+    private var screenImageDecodeGeneration = UUID()
 
     var selectedHost: PairedHost? {
         guard let selectedHostID else { return pairedHosts.first }
@@ -77,14 +110,23 @@ final class HostConnectionClient: ObservableObject {
 
     private var pendingReplies: [UUID: CheckedContinuation<RemoteEnvelope, Error>] = [:]
     private var pendingControlConfiguration: ControlConfiguration?
+    private var configurationStorageFailed = false
+    private let configurationStore = HostControlConfigurationStore(defaults: .standard)
 
     init() {
         let storedHosts = PairedHostStore.load()
         pairedHosts = storedHosts.macs
         selectedHostID = storedHosts.selectedHostID
         nomadEndpoint = NomadFeatureFlag.isEnabled ? storedHosts.selectedHost?.nomadEndpoint : nil
-        controlConfiguration = Self.loadControlConfiguration()
-        pendingControlConfiguration = Self.loadPendingControlConfiguration()
+        controlConfiguration = .standard
+        globalButtonSlotIDs = []
+        do {
+            try configurationStore.migrateLegacy(selectedHostID: storedHosts.selectedHostID)
+            try loadHostConfiguration()
+        } catch {
+            configurationStorageFailed = true
+            state = .failed(.invalidControlConfiguration)
+        }
     }
 
 #if DEBUG
@@ -211,6 +253,10 @@ final class HostConnectionClient: ObservableObject {
     // MARK: - Connexion
 
     func connectIfPossible() {
+        guard !configurationStorageFailed else {
+            state = .failed(.invalidControlConfiguration)
+            return
+        }
         guard let mac = pairedHost, connection == nil else { return }
         state = .searching
         browseForPairedHost(mac)
@@ -239,29 +285,52 @@ final class HostConnectionClient: ObservableObject {
         )
     }
 
-    /// iOS met brièvement le réseau local en pause lors d'un changement
-    /// d'application. Attendre quelques centaines de millisecondes évite une
-    /// fausse tentative pendant que le Wi‑Fi et Bonjour se réactivent.
+    /// Réutilise la socket après une bascule d'application lorsqu'elle répond
+    /// encore. Si iOS l'a réellement perdue pendant la suspension, un ping
+    /// court déclenche immédiatement une nouvelle connexion locale.
     func resumeAfterForeground() {
         foregroundReconnectTask?.cancel()
         guard pairedHost != nil || pendingPairing != nil else { return }
-        foregroundReconnectTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled, let self else { return }
-            if let pairing = self.pendingPairing {
-                guard !pairing.isExpired else {
-                    self.failPairing(.pairingApprovalExpired)
-                    return
+
+        if let resumedConnection = connection, state.isReady {
+            foregroundReconnectTask = Task { [weak self, weak resumedConnection] in
+                guard let self, let resumedConnection else { return }
+                do {
+                    _ = try await self.send(
+                        type: .hello,
+                        payload: HelloPayload(
+                            deviceName: DeviceKeyStore.deviceName,
+                            deviceIdentifier: DeviceKeyStore.deviceIdentifier,
+                            appVersion: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+                        ),
+                        acknowledgementTimeout: 0.75,
+                        reconnectOnTimeout: false
+                    )
+                } catch {
+                    guard !Task.isCancelled, self.connection === resumedConnection else { return }
+                    self.reconnectNow()
                 }
-                self.startPairingTimeout()
-                self.connect(
-                    to: pairing.serviceName,
-                    fingerprint: pairing.certificateFingerprint,
-                    hostName: pairing.hostName
-                )
-            } else {
-                self.reconnectNow()
             }
+            return
+        }
+
+        // Une tentative lancée par une vue recréée est déjà la bonne : ne pas
+        // l'annuler et recommencer le handshake.
+        guard connection == nil, connectionAttempts.isEmpty else { return }
+
+        if let pairing = pendingPairing {
+            guard !pairing.isExpired else {
+                failPairing(.pairingApprovalExpired)
+                return
+            }
+            startPairingTimeout()
+            connect(
+                to: pairing.serviceName,
+                fingerprint: pairing.certificateFingerprint,
+                hostName: pairing.hostName
+            )
+        } else {
+            reconnectNow()
         }
     }
 
@@ -279,8 +348,16 @@ final class HostConnectionClient: ObservableObject {
         browser = nil
         activeServiceName = nil
         framer.reset()
+        pendingPointerMove = .init()
+        pointerMoveSendInFlight = false
+        pointerMoveMessageID = nil
+        pointerMoveInFlightPayload = nil
+        acknowledgedPointerMovesInFlight.removeAll()
+        acknowledgedPointerMovesEnabled = false
         latestScreenFrame = nil
         lastScreenFrameAt = nil
+        latestScreenImage = nil
+        invalidateScreenImageDecode()
         screenStreamStatus = ScreenStreamStatusPayload(isStreaming: false, permissionGranted: true)
         failPendingReplies(RemoteErrorPayload(code: .internalFailure, detail: "déconnecté"))
     }
@@ -491,6 +568,12 @@ final class HostConnectionClient: ObservableObject {
             return
         }
         connection = winner
+        pendingPointerMove = .init()
+        pointerMoveSendInFlight = false
+        pointerMoveMessageID = nil
+        pointerMoveInFlightPayload = nil
+        acknowledgedPointerMovesInFlight.removeAll()
+        acknowledgedPointerMovesEnabled = false
         connectionAttempts.removeValue(forKey: ObjectIdentifier(winner))
         let losingAttempts = connectionAttempts.values
         connectionAttempts.removeAll()
@@ -680,7 +763,9 @@ final class HostConnectionClient: ObservableObject {
             .main
         )
 
-        let parameters = NWParameters(tls: options)
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        let parameters = NWParameters(tls: options, tcp: tcp)
         parameters.includePeerToPeer = true
         return parameters
     }
@@ -693,8 +778,16 @@ final class HostConnectionClient: ObservableObject {
         watchdogTask?.cancel()
         watchdogTask = nil
         connection = nil
+        pendingPointerMove = .init()
+        pointerMoveSendInFlight = false
+        pointerMoveMessageID = nil
+        pointerMoveInFlightPayload = nil
+        acknowledgedPointerMovesInFlight.removeAll()
+        acknowledgedPointerMovesEnabled = false
         latestScreenFrame = nil
         lastScreenFrameAt = nil
+        latestScreenImage = nil
+        invalidateScreenImageDecode()
         screenStreamStatus = ScreenStreamStatusPayload(isStreaming: false, permissionGranted: true)
         failPendingReplies(RemoteErrorPayload(code: .internalFailure, detail: "connexion perdue"))
         guard isPaired || pendingPairing != nil else {
@@ -789,6 +882,38 @@ final class HostConnectionClient: ObservableObject {
             state = .failed(.versionMismatch)
             return
         }
+        if envelope.type == .acknowledgement || envelope.type == .error,
+           let replyTo = envelope.replyTo,
+           let inFlightPayload = acknowledgedPointerMovesInFlight.removeValue(forKey: replyTo),
+           acknowledgedPointerMovesEnabled {
+            let errorPayload = envelope.type == .error
+                ? try? envelope.decodePayload(RemoteErrorPayload.self)
+                : nil
+            let rateLimitedPayload = errorPayload?.code == .rateLimited
+                ? inFlightPayload
+                : nil
+
+            if let rateLimitedPayload {
+                // Une limitation momentanée ne doit pas perdre la distance du
+                // doigt. L'addition reste commutative avec les deltas arrivés
+                // pendant l'aller-retour réseau.
+                pendingPointerMove.append(
+                    deltaX: rateLimitedPayload.deltaX,
+                    deltaY: rateLimitedPayload.deltaY
+                )
+                Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(10))
+                    guard !Task.isCancelled else { return }
+                    self?.flushPendingPointerMove()
+                }
+            } else if let errorPayload {
+                state = .failed(errorPayload.code)
+            } else {
+                flushPendingPointerMove()
+            }
+            return
+        }
+
         if let replyTo = envelope.replyTo, let continuation = pendingReplies.removeValue(forKey: replyTo) {
             if envelope.type == .error, let payload = try? envelope.decodePayload(RemoteErrorPayload.self) {
                 continuation.resume(throwing: payload)
@@ -824,19 +949,11 @@ final class HostConnectionClient: ObservableObject {
             screenCaptureReady = payload.screenCaptureReady
             connectedHostPlatform = payload.hostPlatform
             hostCapabilities = Set(payload.capabilities)
+            acknowledgedPointerMovesEnabled = payload.acknowledgesPointerMoves == true
             state = .ready(hostName: payload.hostName)
             pairingTimeoutTask?.cancel()
             pairingTimeoutTask = nil
             startWatchdog()
-
-            if let pendingControlConfiguration {
-                sendFireAndForget(
-                    type: .controlConfigurationUpdate,
-                    payload: ControlConfigurationPayload(configuration: pendingControlConfiguration)
-                )
-            } else {
-                sendFireAndForget(type: .controlConfigurationRequest, payload: EmptyPayload())
-            }
 
             let advertisedNomadEndpoint = NomadFeatureFlag.isEnabled && payload.nomadEndpoint?.isValid == true
                 ? payload.nomadEndpoint
@@ -867,6 +984,16 @@ final class HostConnectionClient: ObservableObject {
                 nomadEndpoint = refreshed.nomadEndpoint
             }
 
+            guard !configurationStorageFailed else { return }
+            if let pendingControlConfiguration {
+                sendFireAndForget(
+                    type: .controlConfigurationUpdate,
+                    payload: ControlConfigurationPayload(configuration: pendingControlConfiguration)
+                )
+            } else {
+                sendFireAndForget(type: .controlConfigurationRequest, payload: EmptyPayload())
+            }
+
             // L'écoute Bonjour reste active pendant une session Nomade. Elle
             // permet de revenir automatiquement au LAN dès que l'iPhone et le
             // Mac partagent de nouveau le même réseau.
@@ -881,12 +1008,17 @@ final class HostConnectionClient: ObservableObject {
             if let frame = try? envelope.decodePayload(ScreenFramePayload.self) {
                 latestScreenFrame = frame
                 lastScreenFrameAt = Date()
+                prepareScreenImage(from: frame)
             }
 
         case .screenStreamStatus:
             if let payload = try? envelope.decodePayload(ScreenStreamStatusPayload.self) {
                 screenStreamStatus = payload
-                if !payload.isStreaming { latestScreenFrame = nil }
+                if !payload.isStreaming {
+                    latestScreenFrame = nil
+                    latestScreenImage = nil
+                    invalidateScreenImageDecode()
+                }
             }
 
         case .controlConfigurationSnapshot:
@@ -907,7 +1039,7 @@ final class HostConnectionClient: ObservableObject {
             }
             controlConfiguration = payload.configuration
             pendingControlConfiguration = nil
-            Self.persistControlConfiguration(payload.configuration, pending: false)
+            persistControlConfiguration(payload.configuration, pending: false)
 
         case .error:
             if let payload = try? envelope.decodePayload(RemoteErrorPayload.self) {
@@ -925,9 +1057,27 @@ final class HostConnectionClient: ObservableObject {
     }
 
     private func apply(_ storedHosts: PairedHostStore.State) {
+        let previousHostID = selectedHostID
         pairedHosts = storedHosts.macs
         selectedHostID = storedHosts.selectedHostID
         nomadEndpoint = NomadFeatureFlag.isEnabled ? storedHosts.selectedHost?.nomadEndpoint : nil
+        if previousHostID != selectedHostID {
+            controlConfiguration = .standard
+            pendingControlConfiguration = nil
+            globalButtonSlotIDs = []
+            do { try loadHostConfiguration() } catch {
+                configurationStorageFailed = true
+                state = .failed(.invalidControlConfiguration)
+            }
+        }
+    }
+
+    private func loadHostConfiguration() throws {
+        let stored = try configurationStore.load(hostID: selectedHostID)
+        controlConfiguration = stored.configuration
+        pendingControlConfiguration = stored.pending
+        globalButtonSlotIDs = Array(stored.slotIDs.prefix(GlobalButtonGridLayout.maximumSlotCount))
+        configurationStorageFailed = false
     }
 
     private func resetTargetState() {
@@ -938,6 +1088,8 @@ final class HostConnectionClient: ObservableObject {
         hostCapabilities = Set(HostCapability.fullControl)
         latestScreenFrame = nil
         lastScreenFrameAt = nil
+        latestScreenImage = nil
+        invalidateScreenImageDecode()
         screenStreamStatus = ScreenStreamStatusPayload(isStreaming: false, permissionGranted: true)
         connectionRoute = .local
     }
@@ -945,6 +1097,8 @@ final class HostConnectionClient: ObservableObject {
     func startScreenStream(maxWidth: Int = 1_280, framesPerSecond: Int = 10, jpegQuality: Double = 0.45) {
         latestScreenFrame = nil
         lastScreenFrameAt = nil
+        latestScreenImage = nil
+        invalidateScreenImageDecode()
         screenStreamStatus = ScreenStreamStatusPayload(isStreaming: false, permissionGranted: true)
         sendFireAndForget(
             type: .screenStreamRequest,
@@ -961,17 +1115,35 @@ final class HostConnectionClient: ObservableObject {
         sendFireAndForget(type: .screenStreamRequest, payload: ScreenStreamRequestPayload(enabled: false))
         latestScreenFrame = nil
         lastScreenFrameAt = nil
+        latestScreenImage = nil
+        invalidateScreenImageDecode()
         screenStreamStatus = ScreenStreamStatusPayload(isStreaming: false, permissionGranted: true)
     }
 
     // MARK: - Bloc de commandes
+
+    var availableGlobalButtonSlots: [GlobalButtonConfiguration?] {
+        GlobalButtonGridLayout.resolvedSlots(
+            storedIDs: globalButtonSlotIDs,
+            availableButtons: controlConfiguration.availableGlobalButtons
+        )
+    }
+
+    func updateGlobalButtonSlots(_ slots: [GlobalButtonConfiguration?]) {
+        globalButtonSlotIDs = GlobalButtonGridLayout.storageIDs(from: slots)
+        persistGlobalButtonSlotIDs(globalButtonSlotIDs)
+
+        var configuration = controlConfiguration
+        configuration.setAvailableGlobalButtonOrder(slots.compactMap { $0 })
+        updateControlConfiguration(configuration)
+    }
 
     func updateControlConfiguration(_ configuration: ControlConfiguration) {
         var local = configuration
         local.updatedAt = Date()
         controlConfiguration = local
         pendingControlConfiguration = local
-        Self.persistControlConfiguration(local, pending: true)
+        persistControlConfiguration(local, pending: true)
 
         guard state.isReady else { return }
         sendFireAndForget(
@@ -981,32 +1153,31 @@ final class HostConnectionClient: ObservableObject {
     }
 
     func resetControlConfiguration() {
+        let wasStorageFailed = configurationStorageFailed
+        globalButtonSlotIDs = []
+        persistGlobalButtonSlotIDs([])
         updateControlConfiguration(.standard)
+        if wasStorageFailed && !configurationStorageFailed { reconnectNow() }
     }
 
-    private static let controlConfigurationDefaultsKey = "controlConfiguration.v1"
-    private static let pendingControlConfigurationDefaultsKey = "controlConfiguration.pending.v1"
-
-    private static func loadControlConfiguration() -> ControlConfiguration {
-        guard let data = UserDefaults.standard.data(forKey: controlConfigurationDefaultsKey),
-              let configuration = try? RemoteCoding.decoder.decode(ControlConfiguration.self, from: data) else {
-            return .standard
+    private func persistGlobalButtonSlotIDs(_ ids: [String?]) {
+        guard let selectedHostID else { return }
+        do {
+            try configurationStore.saveSlots(ids, hostID: selectedHostID)
+        } catch {
+            configurationStorageFailed = true
+            state = .failed(.invalidControlConfiguration)
         }
-        return configuration
     }
 
-    private static func loadPendingControlConfiguration() -> ControlConfiguration? {
-        guard let data = UserDefaults.standard.data(forKey: pendingControlConfigurationDefaultsKey) else { return nil }
-        return try? RemoteCoding.decoder.decode(ControlConfiguration.self, from: data)
-    }
-
-    private static func persistControlConfiguration(_ configuration: ControlConfiguration, pending: Bool) {
-        guard let data = try? RemoteCoding.encoder.encode(configuration) else { return }
-        UserDefaults.standard.set(data, forKey: controlConfigurationDefaultsKey)
-        if pending {
-            UserDefaults.standard.set(data, forKey: pendingControlConfigurationDefaultsKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: pendingControlConfigurationDefaultsKey)
+    private func persistControlConfiguration(_ configuration: ControlConfiguration, pending: Bool) {
+        guard let selectedHostID else { return }
+        do {
+            try configurationStore.save(configuration, hostID: selectedHostID, pending: pending)
+            configurationStorageFailed = false
+        } catch {
+            configurationStorageFailed = true
+            state = .failed(.invalidControlConfiguration)
         }
     }
 
@@ -1066,6 +1237,20 @@ final class HostConnectionClient: ObservableObject {
 
     @discardableResult
     func send<T: Encodable>(type: RemoteMessageType, payload: T) async throws -> RemoteEnvelope {
+        try await send(
+            type: type,
+            payload: payload,
+            acknowledgementTimeout: ProtocolLimits.acknowledgementTimeout,
+            reconnectOnTimeout: true
+        )
+    }
+
+    private func send<T: Encodable>(
+        type: RemoteMessageType,
+        payload: T,
+        acknowledgementTimeout: TimeInterval,
+        reconnectOnTimeout: Bool
+    ) async throws -> RemoteEnvelope {
         guard let connection, state.isReady || type == .pairingResponse else {
             throw RemoteErrorPayload(code: .internalFailure, detail: "non connecté")
         }
@@ -1084,7 +1269,7 @@ final class HostConnectionClient: ObservableObject {
             connection.send(content: framed, completion: .idempotent)
 
             Task { [weak self] in
-                try? await Task.sleep(for: .seconds(ProtocolLimits.acknowledgementTimeout))
+                try? await Task.sleep(for: .seconds(acknowledgementTimeout))
                 await MainActor.run {
                     guard let pending = self?.pendingReplies.removeValue(forKey: envelope.messageID) else { return }
                     // Sans réponse, on ne conclut pas à un échec : la commande
@@ -1093,7 +1278,9 @@ final class HostConnectionClient: ObservableObject {
                     // La requête périodique des apps sert aussi de battement de
                     // cœur. Si le Mac a redémarré sans que Network.framework
                     // nous signale la socket morte, on la remplace ici.
-                    self?.reconnectNow()
+                    if reconnectOnTimeout {
+                        self?.reconnectNow()
+                    }
                 }
             }
         }
@@ -1113,6 +1300,92 @@ final class HostConnectionClient: ObservableObject {
         let data = try? RemoteCoding.encoder.encode(envelope),
         let framed = try? MessageFramer.frame(data) else { return }
         connection.send(content: framed, completion: .idempotent)
+    }
+
+    /// Maintient une petite fenêtre bornée de déplacements non confirmés.
+    ///
+    /// Si le Wi‑Fi ralentit, les nouveaux deltas sont additionnés pendant que
+    /// la fenêtre est pleine. Le Mac reçoit ensuite un seul rattrapage agrégé
+    /// au lieu de rejouer une longue file de positions périmées. La fenêtre
+    /// reste volontairement à un slot tant que la validation physique longue
+    /// n'a pas prouvé qu'une profondeur supérieure reste parfaitement fluide.
+    func sendPointerMove(deltaX: Double, deltaY: Double) {
+        guard deltaX.isFinite, deltaY.isFinite else { return }
+        pendingPointerMove.append(deltaX: deltaX, deltaY: deltaY)
+        flushPendingPointerMove()
+    }
+
+    private func flushPendingPointerMove() {
+        guard !pendingPointerMove.isEmpty, let connection else { return }
+        if acknowledgedPointerMovesEnabled {
+            guard acknowledgedPointerMovesInFlight.count < maximumAcknowledgedPointerMovesInFlight else { return }
+        } else {
+            guard !pointerMoveSendInFlight else { return }
+        }
+
+        let payload = pendingPointerMove.drain()
+        sequence += 1
+
+        guard let envelope = try? RemoteEnvelope.make(
+            type: .pointerMove,
+            sessionID: sessionID,
+            sequence: sequence,
+            payload: payload
+        ),
+        let data = try? RemoteCoding.encoder.encode(envelope),
+        let framed = try? MessageFramer.frame(data) else { return }
+
+        if acknowledgedPointerMovesEnabled {
+            acknowledgedPointerMovesInFlight[envelope.messageID] = payload
+        } else {
+            pointerMoveSendInFlight = true
+            pointerMoveMessageID = envelope.messageID
+            pointerMoveInFlightPayload = payload
+        }
+        connection.send(content: framed, completion: .contentProcessed { [weak self, weak connection] error in
+            guard let connection else { return }
+            Task { @MainActor in
+                guard let self, self.connection === connection else { return }
+                if error != nil {
+                    if self.acknowledgedPointerMovesEnabled {
+                        self.acknowledgedPointerMovesInFlight.removeValue(forKey: envelope.messageID)
+                    } else {
+                        self.pointerMoveMessageID = nil
+                        self.pointerMoveInFlightPayload = nil
+                        self.pointerMoveSendInFlight = false
+                    }
+                    return
+                }
+                // Pour un compagnon récent, seule sa réponse prouve que le
+                // mouvement a quitté la file TCP et a été appliqué. Avec un
+                // ancien compagnon, contentProcessed reste le repli compatible.
+                guard !self.acknowledgedPointerMovesEnabled,
+                      self.pointerMoveMessageID == envelope.messageID else { return }
+                self.pointerMoveMessageID = nil
+                self.pointerMoveInFlightPayload = nil
+                self.pointerMoveSendInFlight = false
+                self.flushPendingPointerMove()
+            }
+        })
+    }
+
+    private func prepareScreenImage(from frame: ScreenFramePayload) {
+        let generation = UUID()
+        screenImageDecodeGeneration = generation
+        let jpegData = frame.jpegData
+
+        Task { [weak self] in
+            let prepared = await Task.detached(priority: .userInitiated) { () -> PreparedScreenImage? in
+                guard let decoded = UIImage(data: jpegData) else { return nil }
+                return PreparedScreenImage(image: decoded.preparingForDisplay() ?? decoded)
+            }.value
+            guard let self, let prepared, self.screenImageDecodeGeneration == generation else { return }
+            self.latestScreenImage = prepared.image
+        }
+    }
+
+    private func invalidateScreenImageDecode() {
+        screenImageDecodeGeneration = UUID()
     }
 
     private func failPendingReplies(_ error: Error) {

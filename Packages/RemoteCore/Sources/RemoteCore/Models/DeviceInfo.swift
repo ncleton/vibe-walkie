@@ -32,6 +32,7 @@ public struct VibeWalkieInfo: Sendable {
 public enum HostPlatform: String, Codable, Sendable, CaseIterable {
     case macOS = "macos"
     case windows
+    case linux
 }
 
 public enum ClientPlatform: String, Codable, Sendable, CaseIterable {
@@ -48,8 +49,23 @@ public enum HostCapability: String, Codable, Sendable, CaseIterable {
     case customShortcuts = "custom_shortcuts"
     case configurationSync = "configuration_sync"
     case tailscale
+    /// Le compagnon accepte les déplacements du caret à cadence écran dans
+    /// le budget réseau réservé aux gestes continus.
+    case smoothCursorNavigation = "smooth_cursor_navigation"
 
-    public static let fullControl: [HostCapability] = Array(allCases)
+    /// Socle V4 historiquement annoncé par macOS et Windows. Les capacités
+    /// ajoutées après V4 restent opt-in afin qu'un client récent adapte son
+    /// débit lorsqu'il parle à un ancien compagnon.
+    public static let fullControl: [HostCapability] = [
+        .dictationTargeting,
+        .keyboard,
+        .pointer,
+        .appWindows,
+        .screenStreaming,
+        .customShortcuts,
+        .configurationSync,
+        .tailscale
+    ]
 }
 
 /// Point d'accès privé d'un Mac dans un tailnet Tailscale.

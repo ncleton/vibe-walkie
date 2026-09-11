@@ -16,10 +16,10 @@ settings:
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "202609031317"
     CODE_SIGN_STYLE: Automatic
-    # Les Bundle IDs historiques restent liés à la fiche App Store réservée.
-    VIBE_WALKIE_IOS_BUNDLE_IDENTIFIER: com.nicolascleton.viberemote
-    VIBE_WALKIE_CONTROLS_BUNDLE_IDENTIFIER: com.nicolascleton.viberemote.controls
-    VIBE_WALKIE_IOS_TESTS_BUNDLE_IDENTIFIER: com.nicolascleton.viberemote.tests
+    DEVELOPMENT_TEAM: 99QF92KRR7
+    VIBE_WALKIE_IOS_BUNDLE_IDENTIFIER: app.vibewalkie
+    VIBE_WALKIE_CONTROLS_BUNDLE_IDENTIFIER: app.vibewalkie.controls
+    VIBE_WALKIE_IOS_TESTS_BUNDLE_IDENTIFIER: app.vibewalkie.tests
   configs:
     Debug:
       NOMAD_MODE_ENABLED: YES
@@ -61,8 +61,10 @@ targets:
         PRODUCT_NAME: Vibe Walkie
         PRODUCT_MODULE_NAME: VibeWalkieiOS
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: VibeWalkieAppIcon
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: AppRemoteiOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AppRemoteiOS/AppRemoteiOS.entitlements
 
   AppRemoteiOSTests:
     type: bundle.unit-test

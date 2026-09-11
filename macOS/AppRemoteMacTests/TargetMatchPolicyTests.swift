@@ -198,7 +198,11 @@ final class TargetMatchPolicyTests: XCTestCase {
         ))
     }
 
-    func testOpenAIEditorBypassesNonTransactionalAccessibilityWrites() {
+    func testWebEditorsWithNonTransactionalAccessibilityWritesUseKeyboardEvents() {
+        XCTAssertTrue(InsertionMethodPolicy.requiresKeyboardEvents(
+            bundleIdentifier: "com.apple.ScreenSharing",
+            applicationName: "Screen Sharing"
+        ))
         XCTAssertTrue(InsertionMethodPolicy.requiresKeyboardEvents(
             bundleIdentifier: "com.openai.codex"
         ))
@@ -215,6 +219,16 @@ final class TargetMatchPolicyTests: XCTestCase {
         XCTAssertTrue(InsertionMethodPolicy.requiresKeyboardEvents(
             bundleIdentifier: nil,
             applicationName: "ChatGPT"
+        ))
+        XCTAssertTrue(InsertionMethodPolicy.requiresKeyboardEvents(
+            bundleIdentifier: "com.anthropic.claudefordesktop"
+        ))
+        XCTAssertTrue(InsertionMethodPolicy.requiresKeyboardEvents(
+            bundleIdentifier: "com.anthropic.claudefordesktop.helper.renderer"
+        ))
+        XCTAssertTrue(InsertionMethodPolicy.requiresKeyboardEvents(
+            bundleIdentifier: nil,
+            applicationName: "Claude"
         ))
         XCTAssertFalse(InsertionMethodPolicy.requiresKeyboardEvents(
             bundleIdentifier: "com.apple.TextEdit",

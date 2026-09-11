@@ -1,16 +1,26 @@
 import XCTest
 import RemoteCore
+import Security
 @testable import VibeWalkieMac
 
 final class CommercializationConfigurationTests: XCTestCase {
     func testWorkingBundleIdentifierAndMinimumSystem() {
+#if DEBUG
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "com.nicolascleton.viberemote.mac.debug")
+#else
         XCTAssertEqual(Bundle.main.bundleIdentifier, "com.nicolascleton.viberemote.mac")
+#endif
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "LSMinimumSystemVersion") as? String, "14.0")
+        XCTAssertEqual(
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") as? String,
+            "VibeWalkieAppIcon"
+        )
         XCTAssertNotEqual(Bundle.main.object(forInfoDictionaryKey: "LSUIElement") as? Bool, true)
     }
 
     func testBonjourAndSparkleConfigurationAreEmbedded() {
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "NSBonjourServices") as? [String], ["_viberemote._tcp"])
+        XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") as? String)
         XCTAssertFalse(
             (Bundle.main.object(forInfoDictionaryKey: "NSScreenCaptureUsageDescription") as? String)?
                 .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
@@ -34,10 +44,20 @@ final class CommercializationConfigurationTests: XCTestCase {
         XCTAssertEqual(schemes, [UpdateRequest.scheme])
     }
 
+    func testCameraEntitlementIsEmbedded() throws {
+        let task = try XCTUnwrap(SecTaskCreateFromSelf(nil))
+        let value = SecTaskCopyValueForEntitlement(
+            task,
+            "com.apple.security.device.camera" as CFString,
+            nil
+        )
+        XCTAssertEqual(value as? Bool, true)
+    }
+
     func testImmediateUpdateCheckURLIsStrictlyScoped() throws {
         XCTAssertTrue(
             UpdateRequest.requestsImmediateCheck(
-                try XCTUnwrap(URL(string: "vibewalkie-mac://check-for-updates"))
+                try XCTUnwrap(URL(string: "\(UpdateRequest.scheme)://check-for-updates"))
             )
         )
         XCTAssertFalse(
@@ -50,6 +70,24 @@ final class CommercializationConfigurationTests: XCTestCase {
                 try XCTUnwrap(URL(string: "https://check-for-updates"))
             )
         )
+    }
+
+    func testUpdatePresentationStateExposesTheAvailableVersionAndProgress() {
+        XCTAssertFalse(UpdatePresentationState.idle.isVisible)
+        XCTAssertNil(UpdatePresentationState.idle.version)
+
+        let available = UpdatePresentationState.available(version: "1.2.3")
+        XCTAssertTrue(available.isVisible)
+        XCTAssertEqual(available.version, "1.2.3")
+        XCTAssertFalse(available.isBusy)
+
+        let preparing = UpdatePresentationState.preparing(version: "1.2.3")
+        XCTAssertTrue(preparing.isVisible)
+        XCTAssertEqual(preparing.version, "1.2.3")
+        XCTAssertTrue(preparing.isBusy)
+
+        let installing = UpdatePresentationState.installing(version: "1.2.3")
+        XCTAssertTrue(installing.isBusy)
     }
 
     func testPrivacyAndThirdPartyNoticesAreBundled() {

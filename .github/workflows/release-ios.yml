@@ -17,7 +17,7 @@ jobs:
   archive-validate-upload:
     environment: release
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - name: Sélectionner Xcode 26
@@ -31,6 +31,8 @@ jobs:
         run: |
           scripts/ci-local.sh
           gitleaks git --redact --no-banner
+      - name: Revalider la fluidité avant signature iPhone
+        run: scripts/verify-pointer-fluidity.sh
       - name: Importer le certificat Apple Distribution
         env:
           CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
@@ -71,6 +73,7 @@ jobs:
             -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          scripts/verify-ios-app-identity.sh build/VibeRemote-iOS.xcarchive
           xcodebuild -exportArchive \
             -archivePath build/VibeRemote-iOS.xcarchive \
             -exportPath build/ios-export \
@@ -86,5 +89,18 @@ jobs:
         run: |
           IPA="$(find build/ios-export -maxdepth 2 -name '*.ipa' -print -quit)"
           test -n "$IPA"
+          scripts/verify-ios-app-identity.sh "$IPA"
           xcrun altool --validate-app --type ios --file "$IPA" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
           xcrun altool --upload-app --type ios --file "$IPA" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+      - name: Attendre Apple, affecter les groupes et vérifier TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          ASC_PRIVATE_KEY_PATH: ${{ github.workspace }}/AuthKey.p8
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          TESTFLIGHT_GROUPS: Équipe Vibe Walkie
+        run: |
+          printf '%s' "$ASC_PRIVATE_KEY" > "$ASC_PRIVATE_KEY_PATH"
+          chmod 600 "$ASC_PRIVATE_KEY_PATH"
+          node scripts/publish-testflight.mjs --wait --assign

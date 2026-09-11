@@ -6,8 +6,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   build-notarize-release:
@@ -33,6 +31,8 @@ jobs:
         run: |
           scripts/ci-local.sh
           gitleaks git --redact --no-banner
+      - name: Revalider la fluidité avant signature Mac
+        run: scripts/verify-pointer-fluidity.sh
       - name: Importer le certificat Developer ID
         env:
           CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
@@ -50,6 +50,8 @@ jobs:
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          RELEASE_BUILD="$(date -u +%Y%m%d%H%M)"
+          echo "RELEASE_BUILD=$RELEASE_BUILD" >> "$GITHUB_ENV"
           (cd macOS && xcodegen generate)
           xcodebuild archive \
             -project macOS/AppRemoteMac.xcodeproj \
@@ -58,9 +60,14 @@ jobs:
             -destination 'generic/platform=macOS' \
             -archivePath build/VibeWalkie.xcarchive \
             DEVELOPMENT_TEAM="$TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$RELEASE_BUILD" \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY='Developer ID Application'
           codesign --verify --deep --strict --verbose=2 'build/VibeWalkie.xcarchive/Products/Applications/Vibe Walkie.app'
+          ARCHS="$(lipo -archs 'build/VibeWalkie.xcarchive/Products/Applications/Vibe Walkie.app/Contents/MacOS/Vibe Walkie')"
+          [[ " $ARCHS " == *" arm64 "* && " $ARCHS " == *" x86_64 "* ]]
       - name: Créer et signer le DMG
         env:
           DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
@@ -81,7 +88,7 @@ jobs:
           xcrun notarytool submit "updates/VibeWalkie-$VERSION.dmg" --key AuthKey.p8 --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait
           xcrun stapler staple "updates/VibeWalkie-$VERSION.dmg"
           scripts/verify-mac-distribution.sh "updates/VibeWalkie-$VERSION.dmg"
-      - name: Générer l’appcast EdDSA
+      - name: Signer la mise à jour avec Sparkle
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
@@ -90,10 +97,29 @@ jobs:
           tar -xJf Sparkle.tar.xz -C SparkleTools
           printf '%s' "$SPARKLE_PRIVATE_KEY" > sparkle-private-key
           chmod 600 sparkle-private-key
-          SparkleTools/bin/generate_appcast \
-            --ed-key-file sparkle-private-key \
-            --download-url-prefix "https://github.com/ncleton-petitmaker/vibe-walkie/releases/download/$GITHUB_REF_NAME/" \
-            updates
+          VERSION="${GITHUB_REF_NAME#v}"
+          SIGNATURE_OUTPUT="$(SparkleTools/bin/sign_update --ed-key-file sparkle-private-key "updates/VibeWalkie-$VERSION.dmg")"
+          ED_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<< "$SIGNATURE_OUTPUT")"
+          [[ -n "$ED_SIGNATURE" ]]
+          echo "ED_SIGNATURE=$ED_SIGNATURE" >> "$GITHUB_ENV"
+      - name: Publier sur le canal mondial VPS
+        env:
+          RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES_B64="$(base64 < CHANGELOG.md | tr -d '\n')"
+          curl --fail --show-error \
+            --request POST 'https://app-remote.92.222.247.135.sslip.io/api/releases/macos/upload' \
+            --header "Authorization: Bearer $RELEASE_DEPLOY_KEY" \
+            --header "X-Release-Version: $VERSION" \
+            --header "X-Release-Build: $RELEASE_BUILD" \
+            --header "X-Release-Notes: $NOTES_B64" \
+            --header "X-Release-Ed-Signature: $ED_SIGNATURE" \
+            --header 'Content-Type: application/octet-stream' \
+            --data-binary "@updates/VibeWalkie-$VERSION.dmg"
+          curl --fail --show-error --silent \
+            'https://app-remote.92.222.247.135.sslip.io/releases/macos/appcast.xml' \
+            | grep -F "sparkle:version=\"$RELEASE_BUILD\""
       - name: Publier GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -101,22 +127,3 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           gh release create "$GITHUB_REF_NAME" "updates/VibeWalkie-$VERSION.dmg" \
             --verify-tag --title "Vibe Walkie $VERSION" --notes-file CHANGELOG.md
-      - name: Préparer GitHub Pages
-        run: |
-          mkdir pages
-          cp updates/appcast.xml pages/appcast.xml
-          cp updates/*.html pages/
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages
-
-  deploy-appcast:
-    needs: build-notarize-release
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Déployer l’appcast
-        id: deployment
-        uses: actions/deploy-pages@v4

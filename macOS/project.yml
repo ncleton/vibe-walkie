@@ -25,12 +25,20 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ARCHS: "arm64 x86_64"
     ONLY_ACTIVE_ARCH: NO
-    # Les Bundle IDs historiques restent stables pour la signature et les autorisations macOS.
+    # L'identité Release historique reste stable pour les autorisations macOS.
     VIBE_WALKIE_MAC_BUNDLE_IDENTIFIER: com.nicolascleton.viberemote.mac
     VIBE_WALKIE_MAC_TESTS_BUNDLE_IDENTIFIER: com.nicolascleton.viberemote.mac.tests
+    VIBE_WALKIE_MAC_DISPLAY_NAME: Vibe Walkie
+    VIBE_WALKIE_MAC_UPDATE_SCHEME: vibewalkie-mac
   configs:
     Debug:
       NOMAD_MODE_ENABLED: YES
+      # Une app ad hoc ne doit jamais remplacer l'identité TCC ni les liens de
+      # mise à jour de la copie Developer ID installée dans /Applications.
+      VIBE_WALKIE_MAC_BUNDLE_IDENTIFIER: com.nicolascleton.viberemote.mac.debug
+      VIBE_WALKIE_MAC_TESTS_BUNDLE_IDENTIFIER: com.nicolascleton.viberemote.mac.debug.tests
+      VIBE_WALKIE_MAC_DISPLAY_NAME: Vibe Walkie Dev
+      VIBE_WALKIE_MAC_UPDATE_SCHEME: vibewalkie-mac-debug
     Release:
       NOMAD_MODE_ENABLED: YES
 
@@ -56,8 +64,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: "$(VIBE_WALKIE_MAC_BUNDLE_IDENTIFIER)"
         PRODUCT_NAME: Vibe Walkie
         PRODUCT_MODULE_NAME: VibeWalkieMac
+        ASSETCATALOG_COMPILER_APPICON_NAME: VibeWalkieAppIcon
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: AppRemoteMac/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AppRemoteMac/AppRemoteMac.entitlements
         LM_FILTER_WARNINGS: YES
         ENABLE_APP_SANDBOX: NO
 
@@ -78,8 +88,17 @@ targets:
 schemes:
   AppRemoteMac:
     build:
+      runPostActionsOnFailure: true
       targets:
         AppRemoteMac: all
     test:
       targets:
         - AppRemoteMacTests
+      postActions:
+        - name: Fermer l’hôte Vibe Walkie des tests
+          settingsTarget: AppRemoteMac
+          script: |
+            cleanup_script="$SRCROOT/../scripts/cleanup-macos-test-bundles.sh"
+            if test -x "$cleanup_script"; then
+              VIBE_WALKIE_PRODUCTS_DIR="$BUILT_PRODUCTS_DIR" "$cleanup_script" || true
+            fi

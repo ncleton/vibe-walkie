@@ -37,10 +37,13 @@ public enum RemoteErrorCode: String, Codable, Sendable, CaseIterable {
     case payloadTooLarge = "payload_too_large"
     case rateLimited = "rate_limited"
     case internalFailure = "internal_failure"
+    case invalidControlConfiguration = "invalid_control_configuration"
 
     /// Message français prêt à afficher, orienté action.
     public var localizedMessage: String {
         switch self {
+        case .invalidControlConfiguration:
+            return "La configuration des commandes est illisible. Réinitialisez les commandes dans les réglages de Vibe Walkie."
         case .versionMismatch:
             return "Les versions de Vibe Walkie diffèrent. Mettez à jour les deux appareils."
         case .unsupportedCapability:

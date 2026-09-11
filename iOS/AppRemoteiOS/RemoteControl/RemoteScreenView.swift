@@ -108,8 +108,6 @@ struct RemoteScreenView: View {
                     floatingCommandDock(compact: false)
                         .padding(.horizontal, 10)
                         .padding(.bottom, max(8, proxy.safeAreaInsets.bottom))
-                } else {
-                    keyboardDismissButton(compact: false)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -142,8 +140,6 @@ struct RemoteScreenView: View {
                     floatingCommandDock(compact: true)
                         .padding(.horizontal, max(10, max(proxy.safeAreaInsets.leading, proxy.safeAreaInsets.trailing)))
                         .padding(.bottom, max(6, proxy.safeAreaInsets.bottom))
-                } else {
-                    keyboardDismissButton(compact: true)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -155,41 +151,23 @@ struct RemoteScreenView: View {
     @ViewBuilder
     private var inlineKeyboard: some View {
         if showKeyboard {
-            RemoteKeyboardView(presentation: .inline)
+            RemoteKeyboardView(presentation: .inline) { keyboardAnimation in
+                finishClosingKeyboard(animation: keyboardAnimation)
+            }
             .environmentObject(client)
             .frame(maxWidth: .infinity)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
-    }
-
-    private func keyboardDismissButton(compact: Bool) -> some View {
-        Button {
-            closeKeyboard()
-        } label: {
-            Image(systemName: "keyboard.chevron.compact.down")
-                .font(.system(size: compact ? 15 : 17, weight: .semibold))
-                .frame(width: compact ? 40 : 44, height: compact ? 40 : 44)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().stroke(.white.opacity(0.12), lineWidth: 1))
-                .shadow(color: .black.opacity(0.28), radius: 8, y: 4)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.white)
-        .padding(.trailing, compact ? 10 : 12)
-        .padding(.bottom, compact ? 8 : 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .accessibilityLabel("ios.close.keyboard.a7fb38b")
-        .zIndex(20)
     }
 
     private func openKeyboard() {
-        showGlobalPalette = false
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
             showKeyboard = true
         }
     }
 
-    private func closeKeyboard() {
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+    private func finishClosingKeyboard(animation: Animation) {
+        withAnimation(reduceMotion ? nil : animation) {
             showKeyboard = false
         }
     }
@@ -292,8 +270,7 @@ struct RemoteScreenView: View {
 
     @ViewBuilder
     private var liveScreenPreview: some View {
-        if let frame = client.latestScreenFrame,
-           let image = UIImage(data: frame.jpegData) {
+        if let image = client.latestScreenImage {
                 Image(uiImage: image)
                     .resizable()
                     .interpolation(.low)
@@ -402,7 +379,12 @@ struct RemoteScreenView: View {
             }
 
             commandButton(AppL10n.text("ios.keyboard.cd896f5"), systemImage: "keyboard", compact: compact) { openKeyboard() }
-            commandButton(AppL10n.text("ios.clear.e4750da"), systemImage: "delete.left", compact: compact) { sendKey(.backspace) }
+            repeatingCommandButton(
+                AppL10n.text("ios.clear.e4750da"),
+                systemImage: "delete.left",
+                compact: compact,
+                key: .backspace
+            )
             commandButton(AppL10n.text("ios.space.91bdaf6"), systemImage: "space", compact: compact) { sendKey(.space) }
             commandButton(AppL10n.text("ios.return.d9c7efe"), systemImage: "return", compact: compact) { sendKey(.enter) }
             commandButton(
@@ -424,7 +406,7 @@ struct RemoteScreenView: View {
     }
 
     private func pttButton(compact: Bool) -> some View {
-        PTTButton(dictation: dictation)
+        PTTButton(dictation: dictation, showsModeSwitcher: false)
             .scaleEffect(compact ? 0.56 : 0.60)
             .frame(width: compact ? 64 : 66, height: compact ? 56 : 62)
     }
@@ -433,13 +415,9 @@ struct RemoteScreenView: View {
     private func globalPalette(compact: Bool, bottomInset: CGFloat) -> some View {
         if showGlobalPalette {
             GlobalShortcutBubble(
-                buttons: client.controlConfiguration.availableGlobalButtons,
-                perform: { action in
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
-                        showGlobalPalette = false
-                    }
-                    perform(action)
-                },
+                slots: client.availableGlobalButtonSlots,
+                perform: perform,
+                reposition: client.updateGlobalButtonSlots,
                 configure: {
                     showGlobalPalette = false
                     showControlConfigurator = true
@@ -470,28 +448,55 @@ struct RemoteScreenView: View {
             HapticFeedback.shared.tick()
             action()
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: systemImage)
-                    .font(.system(size: compact ? 15 : 17, weight: .semibold))
-                Text(title)
-                    .font(.system(size: compact ? 7 : 8, weight: .semibold))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(isActive ? Color.remoteBlue : .white.opacity(0.9))
-            .frame(width: compact ? 46 : 48, height: compact ? 44 : 50)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: compact ? 14 : 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: compact ? 14 : 16, style: .continuous)
-                    .stroke(isActive ? Color.remoteBlue.opacity(0.75) : .white.opacity(0.12), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.28), radius: 8, y: 4)
+            commandButtonLabel(title, systemImage: systemImage, compact: compact, isActive: isActive)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
     }
 
-    private func sendKey(_ key: RemoteKey) {
-        client.sendFireAndForget(type: .keyPress, payload: KeyPressPayload(key: key))
+    private func repeatingCommandButton(
+        _ title: String,
+        systemImage: String,
+        compact: Bool,
+        key: RemoteKey
+    ) -> some View {
+        AcceleratingKeyRepeatButton {
+            sendKey(key, repeatCount: $0)
+        } label: {
+            commandButtonLabel(title, systemImage: systemImage, compact: compact)
+        }
+        .accessibilityLabel(title)
+        .accessibilityHint("Maintenez pour accélérer progressivement.")
+    }
+
+    private func commandButtonLabel(
+        _ title: String,
+        systemImage: String,
+        compact: Bool,
+        isActive: Bool = false
+    ) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(.system(size: compact ? 15 : 17, weight: .semibold))
+            Text(title)
+                .font(.system(size: compact ? 7 : 8, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(isActive ? Color.remoteBlue : .white.opacity(0.9))
+        .frame(width: compact ? 46 : 48, height: compact ? 44 : 50)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: compact ? 14 : 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: compact ? 14 : 16, style: .continuous)
+                .stroke(isActive ? Color.remoteBlue.opacity(0.75) : .white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.28), radius: 8, y: 4)
+    }
+
+    private func sendKey(_ key: RemoteKey, repeatCount: Int = 1) {
+        client.sendFireAndForget(
+            type: .keyPress,
+            payload: KeyPressPayload(key: key, repeatCount: repeatCount)
+        )
     }
 
     private func perform(_ action: ControlButtonAction) {

@@ -2,7 +2,11 @@ import SwiftUI
 import RemoteCore
 
 private func hostSymbol(for platform: HostPlatform) -> String {
-    platform == .windows ? "pc" : "desktopcomputer"
+    switch platform {
+    case .macOS: "desktopcomputer"
+    case .windows: "pc"
+    case .linux: "server.rack"
+    }
 }
 
 /// Sélecteur court accessible depuis le bouton en haut à gauche de la
@@ -11,6 +15,7 @@ struct HostSwitcherView: View {
     @EnvironmentObject private var client: HostConnectionClient
     @Environment(\.dismiss) private var dismiss
     @State private var showScanner = false
+    @State private var showCompanionSetup = false
 
     var body: some View {
         NavigationStack {
@@ -66,6 +71,7 @@ struct HostSwitcherView: View {
                     } label: {
                         Label("ios.add.8d39b2a", systemImage: "plus")
                     }
+                    Button("ios.companion.install") { showCompanionSetup = true }
                 }
             }
             .navigationTitle("ios.my.macs.52ba7f6")
@@ -78,6 +84,7 @@ struct HostSwitcherView: View {
             .sheet(isPresented: $showScanner) {
                 PairingScannerView().environmentObject(client)
             }
+            .sheet(isPresented: $showCompanionSetup) { CompanionSetupView() }
         }
         .preferredColorScheme(.dark)
         .presentationDetents([.medium, .large])
@@ -98,23 +105,67 @@ struct HostSwitcherView: View {
 
 struct SettingsSheet: View {
     @EnvironmentObject private var client: HostConnectionClient
+    @EnvironmentObject private var health: HealthActivityStore
+    @EnvironmentObject private var purchases: PurchaseManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var showScanner = false
+    @State private var showCompanionSetup = false
     @AppStorage("trackpadSensitivity") private var trackpadSensitivity: Double = TrackpadSettings.defaultPointerSpeed
     @AppStorage("scrollSensitivity") private var scrollSensitivity: Double = TrackpadSettings.defaultScrollSpeed
     @AppStorage("screenQuality") private var screenQuality: Double = 0.45
     @AppStorage("screenFrameRate") private var screenFrameRate: Double = 10
     @AppStorage(KeyboardInputMode.storageKey) private var keyboardInputMode: KeyboardInputMode = .direct
     @AppStorage(RemoteScreenPTTSide.storageKey) private var remoteScreenPTTSide: RemoteScreenPTTSide = .right
+    @AppStorage(PTTMode.storageKey) private var pttMode: PTTMode = .apple
     @AppStorage(AppLanguage.storageKey) private var appLanguageIdentifier = AppLanguage.systemIdentifier
     @AppStorage(DictationLanguage.storageKey) private var dictationLanguageIdentifier = DictationLanguage.automaticIdentifier
     @State private var dictationLocales: [SpeechLocaleOption] = []
     @State private var isLoadingDictationLocales = true
+    @State private var showPremium = false
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    NavigationLink {
+                        HealthDashboardView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.pink)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Santé et activité")
+                                Text(healthSummary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("SANTÉ")
+                } footer: {
+                    Text("Isole les pas réalisés pendant les périodes où la caméra du Mac détecte ta marche.")
+                }
+
+#if !OTA_UPDATES
+                Section {
+                    Button {
+                        showPremium = true
+                    } label: {
+                        Label(
+                            purchases.hasPremiumAccess
+                                ? String(localized: "premium.status.active")
+                                : String(localized: "premium.view.plans"),
+                            systemImage: purchases.hasPremiumAccess ? "checkmark.seal.fill" : "sparkles"
+                        )
+                    }
+                } header: {
+                    Text("premium.title")
+                }
+#endif
+
                 Section {
                     ForEach(client.pairedHosts) { host in
                         Button {
@@ -153,6 +204,7 @@ struct SettingsSheet: View {
                     } label: {
                         Label("ios.add.8d39b2a", systemImage: "plus")
                     }
+                    Button("ios.companion.install") { showCompanionSetup = true }
                 } header: {
                     Text("ios.my.macs.52ba7f6")
                 } footer: {
@@ -220,6 +272,12 @@ struct SettingsSheet: View {
                 }
 
                 Section {
+                    Picker("Mode du bouton central", selection: $pttMode) {
+                        ForEach(PTTMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+
                     NavigationLink {
                         ControlConfiguratorView()
                             .environmentObject(client)
@@ -229,7 +287,13 @@ struct SettingsSheet: View {
                 } header: {
                     Text("ios.controls.0e3118a")
                 } footer: {
-                    Text("ios.seven.customizable.positions.surround.the.central.push.to.talk.button.041c814")
+                    if client.connectedHostPlatform != .macOS, pttMode != .apple {
+                        Text("ChatGPT et Claude sont disponibles avec le compagnon Mac. Sur Windows et Linux, le bouton utilise la dictée Apple.")
+                    } else if pttMode == .apple {
+                        Text("ios.seven.customizable.positions.surround.the.central.push.to.talk.button.041c814")
+                    } else {
+                        Text("Le bouton active le mode vocal sur le Mac. Le microphone utilisé est celui du Mac.")
+                    }
                 }
 
                 Section {
@@ -336,6 +400,11 @@ struct SettingsSheet: View {
             .sheet(isPresented: $showScanner) {
                 PairingScannerView().environmentObject(client)
             }
+            .sheet(isPresented: $showCompanionSetup) { CompanionSetupView() }
+            .sheet(isPresented: $showPremium) {
+                PremiumPaywallView(canDismiss: true)
+                    .environmentObject(purchases)
+            }
         }
         .preferredColorScheme(.dark)
         .task(id: appLanguageIdentifier) {
@@ -355,6 +424,19 @@ struct SettingsSheet: View {
     private var selectedDictationLocale: SpeechLocaleOption? {
         guard dictationLanguageIdentifier != DictationLanguage.automaticIdentifier else { return nil }
         return dictationLocales.first { $0.id == dictationLanguageIdentifier }
+    }
+
+    private var healthSummary: String {
+        switch health.connectionState {
+        case .accessRequested:
+            return "\(health.today.workSteps.formatted()) pas gagnés aujourd’hui"
+        case .notRequested:
+            return "Connecter Apple Santé"
+        case .unavailable:
+            return "Indisponible sur cet appareil"
+        case .failed:
+            return "Connexion à vérifier"
+        }
     }
 
     private var statusText: String {
@@ -437,7 +519,7 @@ private struct NomadSettingsView: View {
                         .foregroundStyle(statusColor)
                 }
                 if let endpoint = client.nomadEndpoint {
-                    LabeledContent("Mac", value: endpoint.magicDNSName)
+                    LabeledContent("ios.companion.computer", value: endpoint.magicDNSName)
                         .font(.footnote)
                 }
             } header: {

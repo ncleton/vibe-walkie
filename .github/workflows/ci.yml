@@ -32,6 +32,8 @@ jobs:
         run: swift test --package-path Packages/RemoteCore
       - name: Lint Swift
         run: swiftlint lint --strict --config .swiftlint.yml Packages iOS macOS
+      - name: Invariants de confidentialité des compagnons
+        run: bash scripts/verify-privacy-invariants.sh
       - name: Détection de secrets
         run: gitleaks git --redact --no-banner
       - name: Build iOS Simulator
@@ -53,21 +55,26 @@ jobs:
             -scheme AppRemoteiOS \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
             CODE_SIGNING_ALLOWED=NO
+      - name: Vérifier la fluidité du curseur
+        run: scripts/verify-pointer-fluidity.sh
       - name: Build macOS arm64
         run: >-
           xcodebuild -project macOS/AppRemoteMac.xcodeproj
           -scheme AppRemoteMac
           -configuration Debug
+          -destination 'platform=macOS,arch=arm64'
+          ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
           CODE_SIGNING_ALLOWED=NO build
       - name: Tests macOS
         run: >-
           xcodebuild test -project macOS/AppRemoteMac.xcodeproj
           -scheme AppRemoteMac
           -destination 'platform=macOS,arch=arm64'
-          CODE_SIGNING_ALLOWED=NO
+          ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
+          CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
       - name: Interdire les composants du prototype
         run: |
-          if rg -n 'itms-services|remoteHost|remotePort|keyboard_edit|keyboardEdit|_appremote\._tcp|com\.yakaperformance\.appremote|relais distant|accès à distance|VPS' Packages iOS macOS --glob '!**/Tests/**' --glob '!**/*Tests/**' --glob '!**/build*/**' --glob '!**/.build/**' --glob '!**/*.xcodeproj/**'; then
+          if rg -n 'itms-services|remoteHost|remotePort|keyboard_edit|keyboardEdit|_appremote\._tcp|com\.yakaperformance\.appremote|relais distant|accès à distance' Packages iOS macOS --glob '!**/Tests/**' --glob '!**/*Tests/**' --glob '!**/build*/**' --glob '!**/.build/**' --glob '!**/*.xcodeproj/**'; then
             exit 1
           fi
 

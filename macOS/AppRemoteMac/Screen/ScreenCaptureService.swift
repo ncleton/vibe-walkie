@@ -24,7 +24,14 @@ enum ScreenCaptureServiceError: LocalizedError {
 /// sur la connexion TLS existante. La file dédiée et le saut de frames évitent
 /// que l'encodage d'image ne ralentisse les commandes souris/clavier.
 final class ScreenCaptureService: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
-    private let frameQueue = DispatchQueue(label: "com.nicolascleton.viberemote.screen", qos: .userInteractive)
+    // L'encodage JPEG ne doit jamais rivaliser avec l'injection souris sur le
+    // thread interactif. Une image peut attendre quelques millisecondes ; le
+    // pointeur, lui, doit rester prioritaire.
+    private let frameQueue = DispatchQueue(
+        label: "com.nicolascleton.viberemote.screen",
+        qos: .userInitiated,
+        autoreleaseFrequency: .workItem
+    )
     private let context = CIContext(options: [.cacheIntermediates: false])
     private let colorSpace = CGColorSpaceCreateDeviceRGB()
 

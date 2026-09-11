@@ -30,6 +30,10 @@
 	<string>La caméra sert uniquement à scanner le code affiché par votre Mac lors de l’appairage.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Vibe Walkie se connecte directement à votre Mac par le réseau local ou votre réseau privé Tailscale.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Vibe Walkie lit vos pas, votre distance de marche et vos minutes d’exercice pendant les sessions où l’app est active et connectée à votre Mac.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Vibe Walkie ne modifie et n’enregistre aucune donnée dans l’app Santé.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Vibe Walkie transcrit votre voix directement sur cet iPhone pour l’écrire sur votre Mac. Aucun audio n’est envoyé ailleurs.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

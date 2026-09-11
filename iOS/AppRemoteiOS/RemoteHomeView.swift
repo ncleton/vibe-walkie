@@ -1,5 +1,86 @@
 import SwiftUI
 import RemoteCore
+import UniformTypeIdentifiers
+
+/// Cadence commune aux touches qui doivent se répéter tant que le doigt reste
+/// posé. Un seul message réseau est émis par intervalle ; son lot grossit avec
+/// la durée de l'appui, ce qui accélère franchement sans saturer la connexion.
+struct AcceleratingKeyRepeatPolicy {
+    static let initialDelay: Duration = .milliseconds(380)
+    static let interval: Duration = .milliseconds(85)
+
+    static func batchSize(forTick tick: Int) -> Int {
+        let stage = min(max(tick, 0) / 14, 5)
+        return 1 << stage
+    }
+}
+
+/// Bouton tactile à répétition accélérée. Le premier appui part immédiatement,
+/// puis les lots passent progressivement de 1 à 32 frappes. Un glissement
+/// volontaire hors du bouton annule la rafale, comme sur un clavier natif.
+struct AcceleratingKeyRepeatButton<Label: View>: View {
+    let action: (Int) -> Void
+    @ViewBuilder let label: () -> Label
+
+    @State private var isPressed = false
+    @State private var didCancelGesture = false
+    @State private var repeatTask: Task<Void, Never>?
+
+    var body: some View {
+        label()
+            .contentShape(Rectangle())
+            .scaleEffect(isPressed ? 0.96 : 1)
+            .opacity(isPressed ? 0.78 : 1)
+            .animation(.easeOut(duration: 0.08), value: isPressed)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if abs(value.translation.width) > 48 || abs(value.translation.height) > 48 {
+                            didCancelGesture = true
+                            stopRepeating()
+                        } else if !didCancelGesture, !isPressed {
+                            startRepeating()
+                        }
+                    }
+                    .onEnded { _ in
+                        didCancelGesture = false
+                        stopRepeating()
+                    }
+            )
+            .onDisappear(perform: stopRepeating)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
+                HapticFeedback.shared.tick()
+                action(1)
+            }
+    }
+
+    private func startRepeating() {
+        isPressed = true
+        HapticFeedback.shared.tick()
+        action(1)
+        repeatTask?.cancel()
+        repeatTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: AcceleratingKeyRepeatPolicy.initialDelay)
+                var tick = 0
+                while !Task.isCancelled {
+                    action(AcceleratingKeyRepeatPolicy.batchSize(forTick: tick))
+                    tick += 1
+                    try await Task.sleep(for: AcceleratingKeyRepeatPolicy.interval)
+                }
+            } catch {
+                // L'annulation au relâchement est le chemin normal.
+            }
+        }
+    }
+
+    private func stopRepeating() {
+        isPressed = false
+        repeatTask?.cancel()
+        repeatTask = nil
+    }
+}
 
 /// Écran principal.
 ///
@@ -46,28 +127,6 @@ struct RemoteHomeView: View {
                                 .padding(.bottom, 8)
                                 .allowsHitTesting(false)
                         }
-                        .overlay(alignment: .bottomTrailing) {
-                            if showKeyboard {
-                                Button {
-                                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                                        showKeyboard = false
-                                    }
-                                } label: {
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.remoteBlue)
-                                        .frame(width: 44, height: 44)
-                                        .background(Circle().fill(Color.controlSurface))
-                                        .overlay(Circle().stroke(.white.opacity(0.1), lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.trailing, 12)
-                                .padding(.bottom, 58)
-                                .transition(.scale.combined(with: .opacity))
-                                .accessibilityLabel("ios.close.keyboard.a7fb38b")
-                                .accessibilityHint("ios.restores.dictation.controls.13392f1")
-                            }
-                        }
 
                     if !showKeyboard {
                         dictationBar
@@ -78,7 +137,12 @@ struct RemoteHomeView: View {
                 .padding(.top, 14)
 
                 if showKeyboard {
-                    RemoteKeyboardView(presentation: .inline)
+                    RemoteKeyboardView(presentation: .inline) { keyboardAnimation in
+                        withAnimation(reduceMotion ? nil : keyboardAnimation) {
+                            showKeyboard = false
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }
@@ -349,13 +413,9 @@ struct RemoteHomeView: View {
         .overlay(alignment: .bottom) {
             if showGlobalPalette {
                 GlobalShortcutBubble(
-                    buttons: client.controlConfiguration.availableGlobalButtons,
-                    perform: { action in
-                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
-                            showGlobalPalette = false
-                        }
-                        perform(action)
-                    },
+                    slots: client.availableGlobalButtonSlots,
+                    perform: perform,
+                    reposition: client.updateGlobalButtonSlots,
                     configure: {
                         showGlobalPalette = false
                         showControlConfigurator = true
@@ -408,38 +468,75 @@ struct RemoteHomeView: View {
         case bottom
     }
 
+    @ViewBuilder
     private func configuredButton(_ zone: ControlZone, style: ConfiguredButtonStyle) -> some View {
         let configuration = client.controlConfiguration.button(in: zone)
         let displayedTitle = ControlTitleLocalization.title(configuration.title, action: configuration.action)
-        return Button {
-            perform(configuration.action)
-        } label: {
-            VStack(spacing: 3) {
-                ControlIconImage(icon: configuration.icon)
-                    .frame(width: style == .side ? 17 : 15, height: style == .side ? 17 : 15)
-                Text(displayedTitle)
-                    .font(.system(size: style == .side ? 8 : 9, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            }
-            .foregroundStyle(.white.opacity(actionIsEmpty(configuration.action) ? 0.48 : 0.9))
-            .frame(maxWidth: style == .bottom ? .infinity : nil)
-            .frame(width: style == .side ? 68 : nil, height: style == .side ? 55 : 43)
-            .background(Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: style == .side ? 16 : 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: style == .side ? 16 : 14, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(displayedTitle)
-        .accessibilityHint(actionIsEmpty(configuration.action) ? "Ouvre la configuration de cette zone." : "Maintenez pour modifier ce bouton.")
-        .contextMenu {
-            Button {
-                showControlConfigurator = true
+        if let key = repeatingKey(for: configuration.action) {
+            AcceleratingKeyRepeatButton {
+                sendKeyBatch(key, repeatCount: $0)
             } label: {
-                Label("ios.edit.this.button.1993f87", systemImage: "slider.horizontal.3")
+                configuredButtonLabel(
+                    configuration: configuration,
+                    displayedTitle: displayedTitle,
+                    style: style
+                )
             }
+            .accessibilityLabel(displayedTitle)
+            .accessibilityHint("Maintenez pour accélérer progressivement.")
+        } else {
+            Button {
+                perform(configuration.action)
+            } label: {
+                configuredButtonLabel(
+                    configuration: configuration,
+                    displayedTitle: displayedTitle,
+                    style: style
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(displayedTitle)
+            .accessibilityHint(actionIsEmpty(configuration.action) ? "Ouvre la configuration de cette zone." : "Maintenez pour modifier ce bouton.")
+            .contextMenu {
+                Button {
+                    showControlConfigurator = true
+                } label: {
+                    Label("ios.edit.this.button.1993f87", systemImage: "slider.horizontal.3")
+                }
+            }
+        }
+    }
+
+    private func configuredButtonLabel(
+        configuration: ControlButtonConfiguration,
+        displayedTitle: String,
+        style: ConfiguredButtonStyle
+    ) -> some View {
+        VStack(spacing: 3) {
+            ControlIconImage(icon: configuration.icon)
+                .frame(width: style == .side ? 17 : 15, height: style == .side ? 17 : 15)
+            Text(displayedTitle)
+                .font(.system(size: style == .side ? 8 : 9, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .foregroundStyle(.white.opacity(actionIsEmpty(configuration.action) ? 0.48 : 0.9))
+        .frame(maxWidth: style == .bottom ? .infinity : nil)
+        .frame(width: style == .side ? 68 : nil, height: style == .side ? 55 : 43)
+        .background(Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: style == .side ? 16 : 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: style == .side ? 16 : 14, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func repeatingKey(for action: ControlButtonAction) -> RemoteKey? {
+        guard case .standardKey(let key) = action else { return nil }
+        switch key {
+        case .backspace, .delete:
+            return key
+        default:
+            return nil
         }
     }
 
@@ -476,18 +573,44 @@ struct RemoteHomeView: View {
 
     private func sendKey(_ key: RemoteKey) {
         HapticFeedback.shared.tick()
-        client.sendFireAndForget(type: .keyPress, payload: KeyPressPayload(key: key))
+        sendKeyBatch(key, repeatCount: 1)
+    }
+
+    private func sendKeyBatch(_ key: RemoteKey, repeatCount: Int) {
+        client.sendFireAndForget(
+            type: .keyPress,
+            payload: KeyPressPayload(key: key, repeatCount: repeatCount)
+        )
     }
 
 }
 
 struct GlobalShortcutBubble: View {
-    let buttons: [GlobalButtonConfiguration]
+    let slots: [GlobalButtonConfiguration?]
     let perform: (ControlButtonAction) -> Void
+    let reposition: ([GlobalButtonConfiguration?]) -> Void
     let configure: () -> Void
     let close: () -> Void
 
+    @State private var positionedButtons: [GlobalButtonConfiguration?]
+    @State private var draggedButtonID: String?
+
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 7), count: 4)
+
+    init(
+        slots: [GlobalButtonConfiguration?],
+        perform: @escaping (ControlButtonAction) -> Void,
+        reposition: @escaping ([GlobalButtonConfiguration?]) -> Void,
+        configure: @escaping () -> Void,
+        close: @escaping () -> Void
+    ) {
+        self.slots = slots
+        self.perform = perform
+        self.reposition = reposition
+        self.configure = configure
+        self.close = close
+        _positionedButtons = State(initialValue: slots)
+    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -513,25 +636,53 @@ struct GlobalShortcutBubble: View {
             }
 
             LazyVGrid(columns: columns, spacing: 7) {
-                ForEach(buttons) { button in
-                    let displayedTitle = ControlTitleLocalization.title(button.title, action: button.action)
-                    Button {
-                        perform(button.action)
-                    } label: {
-                        VStack(spacing: 4) {
-                            ControlIconImage(icon: button.icon)
-                                .frame(width: 18, height: 18)
-                            Text(displayedTitle)
-                                .font(.system(size: 9, weight: .semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
+                ForEach(positionedButtons.indices, id: \.self) { index in
+                    Group {
+                        if let button = positionedButtons[index] {
+                            let displayedTitle = ControlTitleLocalization.title(button.title, action: button.action)
+                            Button {
+                                perform(button.action)
+                            } label: {
+                                VStack(spacing: 4) {
+                                    ControlIconImage(icon: button.icon)
+                                        .frame(width: 18, height: 18)
+                                    Text(displayedTitle)
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.6)
+                                }
+                                .foregroundStyle(.white.opacity(0.92))
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(displayedTitle)
+                            .accessibilityHint("ios.hold.the.handle.then.drag.35697e0")
+                            .onDrag {
+                                draggedButtonID = button.id
+                                HapticFeedback.shared.tick()
+                                return NSItemProvider(object: button.id as NSString)
+                            }
+                        } else {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(.white.opacity(0.025))
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                                }
+                                .accessibilityHidden(true)
                         }
-                        .foregroundStyle(.white.opacity(0.92))
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(displayedTitle)
+                    .onDrop(
+                        of: [UTType.text],
+                        delegate: GlobalButtonDropDelegate(
+                            destinationIndex: index,
+                            positionedButtons: $positionedButtons,
+                            draggedButtonID: $draggedButtonID,
+                            reposition: reposition
+                        )
+                    )
                 }
             }
         }
@@ -542,5 +693,38 @@ struct GlobalShortcutBubble: View {
                 .stroke(.white.opacity(0.14), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
+        .onChange(of: slots) { _, newSlots in
+            positionedButtons = newSlots
+        }
+    }
+}
+
+private struct GlobalButtonDropDelegate: DropDelegate {
+    let destinationIndex: Int
+    @Binding var positionedButtons: [GlobalButtonConfiguration?]
+    @Binding var draggedButtonID: String?
+    let reposition: ([GlobalButtonConfiguration?]) -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedButtonID,
+              positionedButtons.indices.contains(destinationIndex),
+              let sourceIndex = positionedButtons.firstIndex(where: { $0?.id == draggedButtonID }),
+              sourceIndex != destinationIndex else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.15)) {
+            positionedButtons.swapAt(sourceIndex, destinationIndex)
+        }
+        reposition(positionedButtons)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedButtonID = nil
+        return true
     }
 }

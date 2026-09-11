@@ -13,21 +13,13 @@ SIMULATOR_ID=""
 
 cleanup_test_apps() {
   if [[ -n "$SIMULATOR_ID" ]]; then
-    xcrun simctl uninstall "$SIMULATOR_ID" com.nicolascleton.viberemote 2>/dev/null || true
+    xcrun simctl uninstall "$SIMULATOR_ID" app.vibewalkie 2>/dev/null || true
     xcrun simctl uninstall "$SIMULATOR_ID" com.yakaperformance.appremote 2>/dev/null || true
   fi
 
-  while IFS= read -r pid; do
-    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
-  done < <(ps ax -o pid=,command= | awk -v root="$MAC_DERIVED_DATA" \
-    'index($0, root) && /Vibe Walkie\.app\/Contents\/MacOS\/Vibe Walkie/ {print $1}')
-
-  local lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-  if [[ -x "$lsregister" && -d "$MAC_DERIVED_DATA/Build/Products" ]]; then
-    while IFS= read -r app; do
-      "$lsregister" -u "$app" 2>/dev/null || true
-    done < <(find "$MAC_DERIVED_DATA/Build/Products" -type d -name 'Vibe Walkie.app' -prune -print)
-  fi
+  VIBE_WALKIE_PRODUCTS_DIR="$CI_DERIVED_ROOT" \
+    "$ROOT/scripts/cleanup-macos-test-bundles.sh" --all-registered >/dev/null 2>&1 || true
+  rm -rf -- "$CI_DERIVED_ROOT"
 }
 
 trap cleanup_test_apps EXIT
@@ -72,6 +64,12 @@ xcodebuild test \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
   CODE_SIGNING_ALLOWED=NO
 
+# Cette porte reste distincte de la suite générale : elle vérifie aussi les
+# invariants de cadence, de transport et de priorité qui ne se prouvent pas par
+# une simple compilation. Les workflows de release appellent tous ci-local.
+POINTER_FLUIDITY_DERIVED_DATA="$CI_DERIVED_ROOT/pointer-fluidity" \
+  "$ROOT/scripts/verify-pointer-fluidity.sh"
+
 xcodebuild \
   -project "$ROOT/macOS/AppRemoteMac.xcodeproj" \
   -scheme AppRemoteMac \
@@ -95,7 +93,8 @@ xcodebuild test \
   -destination 'platform=macOS,arch=arm64' \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=YES \
-  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_ALLOWED=YES \
+  CODE_SIGN_IDENTITY="-"
 
 if command -v swiftlint >/dev/null 2>&1; then
   swiftlint lint --strict --config "$ROOT/.swiftlint.yml" \

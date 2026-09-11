@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import RemoteCore
 
 enum KeyboardInputMode: String, CaseIterable, Identifiable {
@@ -26,7 +27,7 @@ enum KeyboardInputMode: String, CaseIterable, Identifiable {
 
 /// Clavier distant proposant une frappe immédiate ou un brouillon corrigé.
 struct RemoteKeyboardView: View {
-    enum Presentation {
+    enum Presentation: Equatable {
         case sheet
         case inline
     }
@@ -34,17 +35,18 @@ struct RemoteKeyboardView: View {
     @EnvironmentObject private var client: HostConnectionClient
 
     var presentation: Presentation = .sheet
+    var onDismiss: ((Animation) -> Void)?
 
     @AppStorage(KeyboardInputMode.storageKey) private var inputMode: KeyboardInputMode = .direct
 
-    /// Sentinelle invisible qui permet à iOS de signaler un effacement même
-    /// quand aucun texte visible n'est conservé dans le champ.
-    @State private var buffer = "\u{200B}"
     @State private var draft = ""
     @State private var isSendingDraft = false
     @State private var deliveryMessage: String?
     @State private var errorMessage: String?
-    @FocusState private var isFocused: Bool
+    @State private var directFocusRequest = 0
+    @State private var isDismissalPending = false
+    @State private var isSoftwareKeyboardVisible = false
+    @FocusState private var isComposerFocused: Bool
 
     var body: some View {
         Group {
@@ -55,26 +57,26 @@ struct RemoteKeyboardView: View {
                 inlineContent
             }
         }
-        .toolbar {
-            if presentation == .inline, inputMode == .direct {
-                ToolbarItemGroup(placement: .keyboard) {
-                    keyboardToolbar
-                }
-            }
-        }
         .onAppear {
-            buffer = "\u{200B}"
-            Task { @MainActor in
-                isFocused = true
-            }
+            requestKeyboardFocus()
         }
         .onChange(of: inputMode) { _, _ in
-            buffer = "\u{200B}"
             errorMessage = nil
             deliveryMessage = nil
-            Task { @MainActor in
-                isFocused = true
-            }
+            requestKeyboardFocus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isSoftwareKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
+            isSoftwareKeyboardVisible = false
+            guard presentation == .inline, isDismissalPending else { return }
+            finishInlineKeyboardDismissal(
+                animation: Self.keyboardAnimation(from: notification)
+            )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+            isSoftwareKeyboardVisible = false
         }
     }
 
@@ -122,13 +124,20 @@ struct RemoteKeyboardView: View {
 
     @ViewBuilder
     private var inlineContent: some View {
-        if inputMode == .direct {
-            directInputField
-                .frame(width: 1, height: 1)
-                .opacity(0.01)
-                .accessibilityHidden(true)
-        } else {
-            VStack(spacing: 8) {
+        VStack(spacing: 0) {
+            inlineDismissBar
+
+            if inputMode == .direct {
+                directInputField
+                    // Le texte factice est volontairement très long. Une
+                    // largeur flexible laisserait son intrinsicContentSize
+                    // élargir tout le VStack et pousserait le bouton de
+                    // fermeture hors de l'écran.
+                    .frame(width: 1, height: 1)
+                    .opacity(0.01)
+                    .accessibilityHidden(true)
+            } else {
+                VStack(spacing: 8) {
                 HStack {
                     Label("ios.editable.draft.038347c", systemImage: inputMode.systemImage)
                         .font(.caption.weight(.semibold))
@@ -139,30 +148,56 @@ struct RemoteKeyboardView: View {
                 composer
                 draftActions
                 statusMessage
+                }
+                .padding(12)
+                .background(Color.controlSurface)
             }
-            .padding(12)
-            .background(Color.controlSurface)
+        }
+        .background(Color.appBackground)
+    }
+
+    private var inlineDismissBar: some View {
+        HStack {
+            Spacer()
+
+            Button {
+                HapticFeedback.shared.tick()
+                dismissInlineKeyboard()
+            } label: {
+                Image(systemName: "keyboard.chevron.compact.down")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.controlSurface))
+                    .overlay(Circle().stroke(.white.opacity(0.1), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("ios.close.keyboard.a7fb38b")
+            .accessibilityHint("ios.restores.dictation.controls.13392f1")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .overlay(alignment: .top) {
+            Divider().overlay(.white.opacity(0.08))
         }
     }
 
     private var directInputField: some View {
-        TextField("", text: $buffer)
-            .textFieldStyle(.plain)
-            .focused($isFocused)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-            .onChange(of: buffer) { _, newValue in
-                send(newValue)
-            }
-            .onSubmit {
-                sendKey(.enter)
-            }
+        RemoteDirectTextField(
+            focusRequest: directFocusRequest,
+            onText: sendText,
+            onBackspace: sendBackspace,
+            onSubmit: { sendKey(.enter) },
+            onCursorMove: sendCursorMovement,
+            supportsSmoothCursorNavigation: client.supports(.smoothCursorNavigation)
+        )
     }
 
     private var composer: some View {
         TextField("ios.type.your.text.e0e35fa", text: $draft, axis: .vertical)
             .textFieldStyle(.plain)
-            .focused($isFocused)
+            .focused($isComposerFocused)
             .autocorrectionDisabled(false)
             .textInputAutocapitalization(.sentences)
             .lineLimit(3...7)
@@ -230,38 +265,79 @@ struct RemoteKeyboardView: View {
         }
     }
 
-    @ViewBuilder
-    private var keyboardToolbar: some View {
-        Button {
-            sendKey(.escape)
-        } label: {
-            Label("ios.esc.7bd72d1", systemImage: "escape")
-        }
-
-        Button {
-            sendKey(.tab)
-        } label: {
-            Label("ios.tab.90ddf19", systemImage: "arrow.right.to.line")
+    private func requestKeyboardFocus() {
+        Task { @MainActor in
+            // Le champ inline arrive après l'animation qui remplace la barre
+            // de dictée. Un premier rendement laisse SwiftUI l'insérer dans la
+            // hiérarchie avant de demander le clavier.
+            isComposerFocused = false
+            await Task.yield()
+            if inputMode == .direct {
+                directFocusRequest &+= 1
+            } else {
+                isComposerFocused = true
+            }
         }
     }
 
-    /// N'envoie que ce qui vient d'être ajouté.
-    ///
-    /// Une suppression est traduite en touche Retour arrière plutôt qu'en
-    /// réécriture du champ : réécrire écraserait ce que l'utilisateur a tapé
-    /// directement sur le Mac entre-temps.
-    private func send(_ newValue: String) {
-        let marker = "\u{200B}"
-        guard newValue != marker else { return }
+    /// Commence par rendre le first responder au système, puis laisse passer
+    /// une frame avant de retirer la vue SwiftUI. Le clavier et le contenu ne
+    /// se disputent ainsi plus le même recalcul de layout, ce qui supprimait la
+    /// petite saccade visible au moment de la réduction.
+    private func dismissInlineKeyboard() {
+        guard !isDismissalPending else { return }
+        isDismissalPending = true
+        isComposerFocused = false
+        let expectsSystemAnimation = isSoftwareKeyboardVisible
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
 
-        if newValue.isEmpty {
-            buffer = marker
-            client.sendFireAndForget(type: .keyPress, payload: KeyPressPayload(key: .backspace))
-            return
+        if !expectsSystemAnimation {
+            Task { @MainActor in
+                // Avec un clavier physique, UIKit n'émet aucun
+                // keyboardWillHide : seul le chrome inline est à fermer.
+                await Task.yield()
+                guard isDismissalPending else { return }
+                finishInlineKeyboardDismissal(animation: .smooth(duration: 0.24))
+            }
         }
+    }
 
-        let text = newValue.hasPrefix(marker) ? String(newValue.dropFirst()) : newValue
-        buffer = marker
+    private func finishInlineKeyboardDismissal(animation: Animation) {
+        guard isDismissalPending else { return }
+        isDismissalPending = false
+        onDismiss?(animation)
+    }
+
+    /// Reproduit la courbe fournie par UIKit au lieu d'estimer le mouvement du
+    /// clavier. Le panneau inline et la safe area avancent ainsi sur la même
+    /// horloge, y compris lorsque la durée système varie.
+    private static func keyboardAnimation(from notification: Notification) -> Animation {
+        let userInfo = notification.userInfo
+        let duration = (userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?
+            .doubleValue ?? 0.25
+        let rawCurve = (userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?
+            .intValue ?? UIView.AnimationCurve.easeInOut.rawValue
+
+        switch UIView.AnimationCurve(rawValue: rawCurve) {
+        case .easeIn:
+            return .timingCurve(0.42, 0, 1, 1, duration: duration)
+        case .easeOut:
+            return .timingCurve(0, 0, 0.58, 1, duration: duration)
+        case .linear:
+            return .linear(duration: duration)
+        case .easeInOut, .none:
+            return .timingCurve(0.42, 0, 0.58, 1, duration: duration)
+        @unknown default:
+            return .timingCurve(0.42, 0, 0.58, 1, duration: duration)
+        }
+    }
+
+    private func sendText(_ text: String) {
         guard !text.isEmpty else { return }
         Task {
             do {
@@ -276,6 +352,19 @@ struct RemoteKeyboardView: View {
                 errorMessage = AppL10n.text("ios.the.text.was.not.sent.to.the.mac.8f573c5")
             }
         }
+    }
+
+    private func sendBackspace() {
+        client.sendFireAndForget(type: .keyPress, payload: KeyPressPayload(key: .backspace))
+    }
+
+    private func sendCursorMovement(_ delta: Int) {
+        guard delta != 0 else { return }
+        let key: RemoteKey = delta < 0 ? .arrowLeft : .arrowRight
+        client.sendFireAndForget(
+            type: .keyPress,
+            payload: KeyPressPayload(key: key, repeatCount: min(abs(delta), 32))
+        )
     }
 
     private func keyButton(_ label: String, key: RemoteKey) -> some View {
@@ -318,6 +407,223 @@ struct RemoteKeyboardView: View {
                 errorMessage = AppL10n.text("ios.the.text.was.not.sent.to.the.mac.8f573c5")
             }
             isSendingDraft = false
+        }
+    }
+}
+
+/// Suit uniquement un caret simple. Une sélection de texte à deux doigts est
+/// volontairement ignorée : le compagnon ne connaît pas le contenu distant et
+/// ne peut donc pas reproduire une plage sélectionnée de façon fiable.
+struct RemoteCursorSelectionTracker {
+    static let maximumPlausibleMovement = 32
+
+    private(set) var previousOffset: Int?
+
+    mutating func reset(to offset: Int) {
+        previousOffset = offset
+    }
+
+    mutating func movement(selectionStart: Int, selectionEnd: Int) -> Int? {
+        guard selectionStart == selectionEnd else { return nil }
+        defer { previousOffset = selectionStart }
+        guard let previousOffset else { return nil }
+        let delta = selectionStart - previousOffset
+        guard delta != 0,
+              abs(delta) <= Self.maximumPlausibleMovement else { return nil }
+        return delta
+    }
+}
+
+/// Champ UIKit invisible conservant assez de positions de texte pour que le
+/// geste natif « maintenir Espace puis glisser » puisse déplacer son caret.
+/// Les frappes ne modifient jamais ce texte factice : elles restent envoyées
+/// directement au Mac.
+private struct RemoteDirectTextField: UIViewRepresentable {
+    let focusRequest: Int
+    let onText: (String) -> Void
+    let onBackspace: () -> Void
+    let onSubmit: () -> Void
+    let onCursorMove: (Int) -> Void
+    let supportsSmoothCursorNavigation: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField(frame: .zero)
+        textField.delegate = context.coordinator
+        textField.textColor = .clear
+        textField.tintColor = .clear
+        textField.backgroundColor = .clear
+        textField.borderStyle = .none
+        textField.autocorrectionType = .no
+        textField.autocapitalizationType = .none
+        textField.spellCheckingType = .no
+        textField.smartDashesType = .no
+        textField.smartQuotesType = .no
+        textField.smartInsertDeleteType = .no
+        textField.isAccessibilityElement = false
+        context.coordinator.installShadowText(in: textField)
+        return textField
+    }
+
+    func updateUIView(_ textField: UITextField, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.requestFocus(in: textField, request: focusRequest)
+    }
+
+    static func dismantleUIView(_ textField: UITextField, coordinator: Coordinator) {
+        coordinator.flushPendingMovement()
+        textField.resignFirstResponder()
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        private static let shadowLength = 513
+        private static let centerOffset = shadowLength / 2
+        // Une cadence écran (environ 60 Hz) évite les bonds perceptibles du
+        // caret. Les petits lots absorbent les callbacks UIKit rapprochés sans
+        // rejouer d'un coup toute la distance accumulée.
+        private var maximumBatchSize: Int {
+            parent.supportsSmoothCursorNavigation ? 3 : 32
+        }
+
+        private var flushInterval: Duration {
+            .milliseconds(parent.supportsSmoothCursorNavigation ? 16 : 50)
+        }
+
+        var parent: RemoteDirectTextField
+        private var selectionTracker = RemoteCursorSelectionTracker()
+        private var lastFocusRequest: Int?
+        private var isApplyingSelection = false
+        private var pendingMovement = 0
+        private var flushTask: Task<Void, Never>?
+        private var recenterTask: Task<Void, Never>?
+
+        init(parent: RemoteDirectTextField) {
+            self.parent = parent
+        }
+
+        deinit {
+            flushTask?.cancel()
+            recenterTask?.cancel()
+        }
+
+        func installShadowText(in textField: UITextField) {
+            // L'espace cadratin numérique possède une largeur réelle tout en
+            // restant neutre pour les suggestions, contrairement à une longue
+            // suite de lettres factices.
+            textField.text = String(repeating: "\u{2007}", count: Self.shadowLength)
+            setSelection(Self.centerOffset, in: textField)
+        }
+
+        func requestFocus(in textField: UITextField, request: Int) {
+            guard lastFocusRequest != request else { return }
+            lastFocusRequest = request
+            Task { @MainActor [weak self, weak textField] in
+                guard let self, let textField else { return }
+                // `becomeFirstResponder` peut placer momentanément le caret à
+                // la fin des 513 caractères factices. Ce saut UIKit n'est pas
+                // un geste utilisateur et ne doit jamais devenir une rafale
+                // de flèches envoyée au Mac.
+                self.isApplyingSelection = true
+                textField.becomeFirstResponder()
+                self.applySelection(Self.centerOffset, in: textField)
+                self.pendingMovement = 0
+                self.flushTask?.cancel()
+                self.flushTask = nil
+                self.isApplyingSelection = false
+            }
+        }
+
+        func textField(
+            _ textField: UITextField,
+            shouldChangeCharactersIn range: NSRange,
+            replacementString string: String
+        ) -> Bool {
+            if string.isEmpty {
+                if range.length > 0 {
+                    parent.onBackspace()
+                }
+            } else {
+                parent.onText(string)
+            }
+            return false
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            parent.onSubmit()
+            return false
+        }
+
+        func textFieldDidChangeSelection(_ textField: UITextField) {
+            guard !isApplyingSelection,
+                  let range = textField.selectedTextRange else { return }
+            let start = textField.offset(from: textField.beginningOfDocument, to: range.start)
+            let end = textField.offset(from: textField.beginningOfDocument, to: range.end)
+            scheduleRecentering(in: textField)
+            guard let movement = selectionTracker.movement(
+                selectionStart: start,
+                selectionEnd: end
+            ) else { return }
+            queueMovement(movement)
+        }
+
+        private func setSelection(_ offset: Int, in textField: UITextField) {
+            isApplyingSelection = true
+            applySelection(offset, in: textField)
+            isApplyingSelection = false
+        }
+
+        private func applySelection(_ offset: Int, in textField: UITextField) {
+            guard let position = textField.position(
+                from: textField.beginningOfDocument,
+                offset: offset
+            ), let range = textField.textRange(from: position, to: position) else { return }
+            textField.selectedTextRange = range
+            selectionTracker.reset(to: offset)
+        }
+
+        private func queueMovement(_ movement: Int) {
+            pendingMovement = min(max(pendingMovement + movement, -256), 256)
+            guard flushTask == nil else { return }
+            flushTask = Task { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(for: self?.flushInterval ?? .milliseconds(50))
+                } catch {
+                    return
+                }
+                self?.flushPendingMovement()
+            }
+        }
+
+        private func scheduleRecentering(in textField: UITextField) {
+            recenterTask?.cancel()
+            recenterTask = Task { @MainActor [weak self, weak textField] in
+                do {
+                    try await Task.sleep(for: .milliseconds(350))
+                } catch {
+                    return
+                }
+                guard let self, let textField else { return }
+                self.setSelection(Self.centerOffset, in: textField)
+                self.recenterTask = nil
+            }
+        }
+
+        func flushPendingMovement() {
+            flushTask?.cancel()
+            flushTask = nil
+            guard pendingMovement != 0 else { return }
+
+            let batch = min(max(pendingMovement, -maximumBatchSize), maximumBatchSize)
+            pendingMovement -= batch
+            parent.onCursorMove(batch)
+
+            if pendingMovement != 0 {
+                queueMovement(0)
+            }
         }
     }
 }

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "appleSnapshot": {
+    "platform": "iOS Simulator",
+    "osVersion": "26.5",
+    "sdkVersion": "26.5",
+    "capturedAt": "2026-08-31",
+    "source": "SpeechTranscriber.supportedLocales union DictationTranscriber.supportedLocales",
+    "requiresPhysicalDeviceRefreshBeforeStoreSubmission": true,
+    "speechLocales": [
+      "ar-SA", "ca-ES", "cs-CZ", "da-DK", "de-AT", "de-CH", "de-DE", "el-GR",
+      "en-AU", "en-CA", "en-GB", "en-IE", "en-IN", "en-NZ", "en-SG", "en-US", "en-ZA",
+      "es-CL", "es-ES", "es-MX", "es-US", "fi-FI", "fr-BE", "fr-CA", "fr-CH", "fr-FR",
+      "he-IL", "hi-IN", "hr-HR", "hu-HU", "id-ID", "it-CH", "it-IT", "ja-JP", "ko-KR",
+      "ms-MY", "nb-NO", "nl-BE", "nl-NL", "pl-PL", "pt-BR", "pt-PT", "ro-RO", "ru-RU",
+      "sk-SK", "sv-SE", "th-TH", "tr-TR", "uk-UA", "vi-VN", "yue-CN", "zh-CN", "zh-HK", "zh-TW"
+    ]
+  },
+  "uiLocales": [
+    "ar", "ca", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hr", "hu",
+    "id", "it", "ja", "ko", "ms", "nb", "nl", "pl", "pt", "ro", "ru", "sk", "sv", "th",
+    "tr", "uk", "vi", "yue", "zh-Hans", "zh-Hant"
+  ],
+  "rtlLocales": ["ar", "he"],
+  "siteLocales": [
+    { "id": "fr", "route": "", "uiLocale": "fr" },
+    { "id": "en", "route": "en", "uiLocale": "en" },
+    { "id": "ar", "route": "ar", "uiLocale": "ar" },
+    { "id": "ca", "route": "ca", "uiLocale": "ca" },
+    { "id": "cs", "route": "cs", "uiLocale": "cs" },
+    { "id": "da", "route": "da", "uiLocale": "da" },
+    { "id": "de", "route": "de", "uiLocale": "de" },
+    { "id": "el", "route": "el", "uiLocale": "el" },
+    { "id": "es-ES", "route": "es-es", "uiLocale": "es" },
+    { "id": "es-MX", "route": "es-mx", "uiLocale": "es" },
+    { "id": "fi", "route": "fi", "uiLocale": "fi" },
+    { "id": "fr-CA", "route": "fr-ca", "uiLocale": "fr" },
+    { "id": "he", "route": "he", "uiLocale": "he" },
+    { "id": "hi", "route": "hi", "uiLocale": "hi" },
+    { "id": "hr", "route": "hr", "uiLocale": "hr" },
+    { "id": "hu", "route": "hu", "uiLocale": "hu" },
+    { "id": "id", "route": "id", "uiLocale": "id" },
+    { "id": "it", "route": "it", "uiLocale": "it" },
+    { "id": "ja", "route": "ja", "uiLocale": "ja" },
+    { "id": "ko", "route": "ko", "uiLocale": "ko" },
+    { "id": "ms", "route": "ms", "uiLocale": "ms" },
+    { "id": "nb", "route": "no", "uiLocale": "nb" },
+    { "id": "nl", "route": "nl", "uiLocale": "nl" },
+    { "id": "pl", "route": "pl", "uiLocale": "pl" },
+    { "id": "pt-BR", "route": "pt-br", "uiLocale": "pt" },
+    { "id": "pt-PT", "route": "pt-pt", "uiLocale": "pt" },
+    { "id": "ro", "route": "ro", "uiLocale": "ro" },
+    { "id": "ru", "route": "ru", "uiLocale": "ru" },
+    { "id": "sk", "route": "sk", "uiLocale": "sk" },
+    { "id": "sv", "route": "sv", "uiLocale": "sv" },
+    { "id": "th", "route": "th", "uiLocale": "th" },
+    { "id": "tr", "route": "tr", "uiLocale": "tr" },
+    { "id": "uk", "route": "uk", "uiLocale": "uk" },
+    { "id": "vi", "route": "vi", "uiLocale": "vi" },
+    { "id": "yue", "route": "yue", "uiLocale": "yue" },
+    { "id": "zh-Hans", "route": "zh-hans", "uiLocale": "zh-Hans" },
+    { "id": "zh-Hant", "route": "zh-hant", "uiLocale": "zh-Hant" }
+  ],
+  "appStore": {
+    "primaryLocale": "en-US",
+    "baseCountry": "FRA",
+    "basePriceEUR": 14.99,
+    "distribution": "public",
+    "availability": "all-current-and-future-territories",
+    "locales": [
+      "ar-SA", "ca", "cs", "da", "de-DE", "el", "en-AU", "en-CA", "en-GB", "en-US",
+      "es-ES", "es-MX", "fi", "fr-CA", "fr-FR", "he", "hi", "hr", "hu", "id", "it",
+      "ja", "ko", "ms", "nl-NL", "no", "pl", "pt-BR", "pt-PT", "ro", "ru", "sk", "sv",
+      "th", "tr", "uk", "vi", "zh-Hans", "zh-Hant"
+    ]
+  }
+}

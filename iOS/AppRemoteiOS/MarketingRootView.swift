@@ -7,6 +7,7 @@ import SwiftUI
 struct MarketingRootView: View {
     let mode: String
     @ObservedObject var client: HostConnectionClient
+    @EnvironmentObject private var health: HealthActivityStore
 
     var body: some View {
         Group {
@@ -24,21 +25,128 @@ struct MarketingRootView: View {
                 MarketingScreenRoot(client: client)
             case "--marketing-settings":
                 MarketingSettingsPreview(client: client)
+            case "--marketing-health":
+                NavigationStack {
+                    HealthDashboardView()
+                }
             case "--marketing-controls":
                 NavigationStack {
                     ControlConfiguratorView()
                         .environmentObject(client)
                 }
             case "--marketing-welcome":
-                DiscoveryView()
+                WelcomeView()
             case "--marketing-macs":
                 HostSwitcherView()
                     .environmentObject(client)
+            case "--marketing-paywall":
+                MarketingPaywallPreview()
             default:
                 RemoteHomeView(client: client)
             }
         }
-        .task { client.configureMarketingPreview() }
+        .task {
+            client.configureMarketingPreview()
+            if mode == "--marketing-health" {
+                health.configureMarketingPreview()
+            }
+        }
+    }
+}
+
+/// Capture fidèle du paywall pour App Review. Les produits StoreKit ne sont
+/// pas disponibles dans un build simulateur non signé ; seuls leurs trois
+/// libellés et prix sont figés ici. Cette vue est exclue des archives Release.
+private struct MarketingPaywallPreview: View {
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Image(systemName: "figure.walk.motion")
+                            .font(.system(size: 46, weight: .medium))
+                            .foregroundStyle(Color.remoteBlue)
+                        Text("premium.headline")
+                            .font(.largeTitle.bold())
+                            .foregroundStyle(.white)
+                        Text("premium.intro")
+                            .font(.body)
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        feature("mic.fill", "premium.feature.dictation")
+                        feature("hand.tap.fill", "premium.feature.controls")
+                        feature("rectangle.inset.filled.and.person.filled", "premium.feature.screen")
+                        feature("figure.walk", "premium.feature.health")
+                    }
+                    .padding(18)
+                    .background(Color.controlSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                    VStack(spacing: 12) {
+                        plan("Premium Yearly", detail: "premium.plan.yearly.detail", price: "€9.99", featured: true)
+                        plan("Premium Monthly", detail: "premium.plan.monthly.detail", price: "€2.99")
+                        plan("Premium Lifetime", detail: "premium.plan.lifetime.detail", price: "€29.99")
+                    }
+
+                    VStack(spacing: 10) {
+                        Text("premium.restore")
+                        Text("premium.offer.code")
+                        Text("premium.manage")
+                    }
+                    .foregroundStyle(Color.remoteBlue)
+                    .frame(maxWidth: .infinity)
+
+                    VStack(spacing: 10) {
+                        Text("premium.renewal.notice")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.58))
+                            .multilineTextAlignment(.center)
+                        HStack {
+                            Text("premium.privacy")
+                            Text("•").foregroundStyle(.secondary)
+                            Text("premium.terms")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(Color.remoteBlue)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(22)
+            }
+            .background(Color.appBackground.ignoresSafeArea())
+            .navigationTitle(String(localized: "premium.title"))
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func feature(_ symbol: String, _ title: LocalizedStringKey) -> some View {
+        Label(title, systemImage: symbol)
+            .foregroundStyle(.white)
+            .font(.subheadline.weight(.semibold))
+    }
+
+    private func plan(
+        _ name: String,
+        detail: LocalizedStringKey,
+        price: String,
+        featured: Bool = false
+    ) -> some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: name).font(.headline)
+                Text(detail).font(.caption).foregroundStyle(.white.opacity(0.64))
+            }
+            Spacer()
+            Text(verbatim: price).font(.title3.bold()).monospacedDigit()
+        }
+        .foregroundStyle(.white)
+        .padding(17)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(featured ? Color.remoteBlue : Color.controlSurface)
+        )
     }
 }
 

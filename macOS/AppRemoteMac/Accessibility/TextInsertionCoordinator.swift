@@ -51,10 +51,10 @@ final class TextInsertionCoordinator {
             bundleIdentifier: target.bundleIdentifier,
             applicationName: target.applicationName
         ) || exposesPlaceholderAsValue {
-            // L'éditeur OpenAI publie un arbre AX utile à la détection du
-            // curseur, mais ses écritures sont différées et non transactionnelles.
-            // Les essayer avant CGEvent peut donc insérer la même dictée deux
-            // fois et matérialiser son texte d'aide comme du vrai contenu.
+            // Les éditeurs OpenAI et Claude publient un arbre AX utile à la
+            // détection du curseur, mais leurs écritures sont différées et non
+            // transactionnelles. Les essayer avant CGEvent peut donc insérer
+            // la même dictée deux fois ou matérialiser le texte d'aide.
             let result = try insertViaKeyboardEvents(preparedText, target: target)
             remember(.keyboardEvents, for: target)
             return result
@@ -128,7 +128,9 @@ final class TextInsertionCoordinator {
             throw RemoteErrorPayload(code: .permissionAccessibilityDenied)
         }
 
-        CGEventFactory.type(text)
+        guard CGEventFactory.type(text) else {
+            throw RemoteErrorPayload(code: .internalFailure, detail: "événements clavier indisponibles")
+        }
         return InsertionResult(
             method: .keyboardEvents,
             verified: false,
@@ -400,17 +402,22 @@ enum InsertionMethodPolicy {
         bundleIdentifier: String?,
         applicationName: String? = nil
     ) -> Bool {
-        let openAIBundles = [
+        let keyboardEventBundles = [
+            // Apple's Screen Sharing exposes the remote desktop as one opaque
+            // AXSharedScreen element. AX/pasteboard insertion cannot see the
+            // remote caret, while physical keyboard events are forwarded to it.
+            "com.apple.screensharing",
             "com.openai.codex",
             "com.openai.chat",
-            "com.openai.chatgpt"
+            "com.openai.chatgpt",
+            "com.anthropic.claudefordesktop"
         ]
         if let bundle = bundleIdentifier?.lowercased(),
-           openAIBundles.contains(where: { bundle == $0 || bundle.hasPrefix($0 + ".") }) {
+           keyboardEventBundles.contains(where: { bundle == $0 || bundle.hasPrefix($0 + ".") }) {
             return true
         }
 
         guard let name = applicationName?.lowercased() else { return false }
-        return name.contains("codex") || name.contains("chatgpt")
+        return name.contains("codex") || name.contains("chatgpt") || name == "claude"
     }
 }

@@ -30,11 +30,17 @@ final class SessionRouter {
 
     enum Outcome {
         case acknowledge(AcknowledgementPayload)
+        /// Accusé léger, propre à la session : il confirme au téléphone que le
+        /// geste a réellement été injecté, sans remplir les caches de commandes.
+        case gestureAcknowledged
         case snapshot(WindowsSnapshotPayload)
         case screenRequest(ScreenStreamRequestPayload)
         case controlConfigurationRequest
         case controlConfigurationUpdate(ControlConfiguration)
+        case workWalkingSessionsRequest(Date)
+        case healthActivitySnapshotUpdate(HealthActivitySnapshotPayload)
         case hostShortcutPress(String)
+        case voiceControl(VoiceControlPayload)
         case failure(RemoteErrorPayload)
         case ignore
     }
@@ -58,7 +64,14 @@ final class SessionRouter {
             break
         }
 
-        let isGesture = [.pointerMove, .pointerAbsolute, .pointerDrag, .scroll].contains(envelope.type)
+        // Les flèches générées par le trackpad de la barre Espace arrivent à
+        // la cadence d'affichage. Elles doivent emprunter le budget des gestes
+        // continus, sinon le limiteur des commandes (20/s) les saccade après
+        // quelques instants. Les touches restent des valeurs fermées et leur
+        // répétition est bornée avant injection.
+        let isGesture = [
+            .pointerMove, .pointerAbsolute, .pointerDrag, .scroll, .keyPress
+        ].contains(envelope.type)
         let allowed = isGesture ? gestureLimiter.allow() : commandLimiter.allow()
         guard allowed else {
             return .failure(RemoteErrorPayload(code: .rateLimited))
@@ -117,8 +130,23 @@ final class SessionRouter {
 
         case .keyPress:
             let payload = try envelope.decodePayload(KeyPressPayload.self)
-            CGEventFactory.press(payload.key)
+            CGEventFactory.press(
+                payload.key,
+                repeatCount: ControlInputPolicy.keyRepeatCount(payload.repeatCount)
+            )
             return record(envelope, AcknowledgementPayload(ok: true))
+
+        case .voiceControl:
+            let payload = try envelope.decodePayload(VoiceControlPayload.self)
+            guard AccessibilityClient.isTrusted else {
+                if payload.phase == .began {
+                    AccessibilityClient.requestTrust()
+                    AccessibilityClient.openAccessibilitySettings()
+                }
+                NSLog("[VibeWalkie] voice_control_permission_denied")
+                throw RemoteErrorPayload(code: .permissionAccessibilityDenied)
+            }
+            return .voiceControl(payload)
 
         case .hostShortcutPress:
             let payload = try envelope.decodePayload(HostShortcutPressPayload.self)
@@ -140,7 +168,7 @@ final class SessionRouter {
                 deltaX: try ControlInputPolicy.gestureDelta(payload.deltaX),
                 deltaY: try ControlInputPolicy.gestureDelta(payload.deltaY)
             )
-            return .ignore
+            return .gestureAcknowledged
 
         case .pointerAbsolute:
             let payload = try envelope.decodePayload(PointerAbsolutePayload.self)
@@ -187,9 +215,30 @@ final class SessionRouter {
         case .screenStreamRequest:
             return .screenRequest(try envelope.decodePayload(ScreenStreamRequestPayload.self))
 
+        case .workWalkingSessionsRequest:
+            let payload = try envelope.decodePayload(WorkWalkingSessionsRequestPayload.self)
+            return .workWalkingSessionsRequest(payload.since)
+
+        case .healthActivitySnapshotUpdate:
+            let payload = try envelope.decodePayload(HealthActivitySnapshotPayload.self)
+            let briskMinutesAreValid = payload.briskWalkingMinutesLast7Days.map {
+                $0.isFinite && (0...10_080).contains($0)
+            } ?? true
+            let capturedAtIsPlausible = payload.capturedAt >= Date().addingTimeInterval(-7 * 86_400)
+                && payload.capturedAt <= Date().addingTimeInterval(3_600)
+            guard briskMinutesAreValid,
+                  payload.walkingDistanceMetersLast7Days.isFinite,
+                  (0...1_000_000).contains(payload.walkingDistanceMetersLast7Days),
+                  payload.detectedWalkingDurationLast7Days.isFinite,
+                  (0...604_800).contains(payload.detectedWalkingDurationLast7Days),
+                  capturedAtIsPlausible else {
+                throw RemoteErrorPayload(code: .protocolMismatch)
+            }
+            return .healthActivitySnapshotUpdate(payload)
+
         case .pairingChallenge, .pairingResponse, .pairingPending, .acknowledgement,
              .connectionStatus, .error, .windowsSnapshot, .screenStreamStatus,
-             .screenFrame, .controlConfigurationSnapshot:
+             .screenFrame, .controlConfigurationSnapshot, .workWalkingSessionsSnapshot:
             return .ignore
         }
     }

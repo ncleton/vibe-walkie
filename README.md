@@ -6,13 +6,11 @@
 
 <p align="center">
   <strong>Work beyond the desk.</strong><br>
-  Walk, talk and keep your Mac under your thumb from your iPhone.
+  Walk, talk and control your computer from your iPhone.
 </p>
 
 <p align="center">
   <a href="https://vibewalkie.app">Official website</a>
-  ·
-  <a href="https://testflight.apple.com/join/9AUshVWm">TestFlight</a>
   ·
   <a href="#build-the-project">Build the project</a>
   ·
@@ -27,14 +25,15 @@
   <a href="LICENSE"><img alt="MPL 2.0 license" src="https://img.shields.io/badge/license-MPL--2.0-7B42BC"></a>
 </p>
 
-Vibe Walkie turns your iPhone into a remote control for Mac: on-device dictation, keyboard, trackpad, app selection and optional screen view. It connects over your local network by default; Roaming mode can use your own Tailscale network. No Vibe Walkie account, subscription or server is required.
+Vibe Walkie turns your iPhone into a remote control for Mac, Windows and Linux: on-device dictation, keyboard, trackpad, app selection and optional screen view. It connects over your local network by default; Roaming mode can use your own Tailscale network. The desktop companions are free. Full control in the iPhone app requires an active Vibe Walkie purchase; purchases and restoration use Apple StoreKit. Speech recognition stays on the iPhone, and no Vibe Walkie relay server is required.
 
 ## What's new
 
-- **Multi-Mac** — pair several Macs with one iPhone and switch machines from the top-left button.
-- **Roaming mode** — reach your Mac remotely through Tailscale, with automatic fallback to the local network whenever it is available.
-- **Customizable controls** — arrange quick keys, labels and icons around the way you work.
-- **More complete control** — an integrated keyboard, improved trackpad and screen view in the same remote.
+- **Mac, Windows and Linux/VPS** — pair different computers with the same iPhone app. Each keeps its own control configuration and shortcuts.
+- **Private remote connection** — use your Tailscale network when the computer is elsewhere.
+- **Real screen and input** — desktop capture, keyboard, trackpad, window selection and verified dictation in supported fields.
+
+[Install the Windows/Linux companion](Companion/README.md). The VPS launcher creates an X11 desktop when the server has no physical display. Native iPhone Duo layout support is developed separately.
 
 ## Vibe Walkie in action
 
@@ -60,54 +59,50 @@ Vibe Walkie turns your iPhone into a remote control for Mac: on-device dictation
 | --- | --- |
 | **Dictate while walking** | Hold the button, speak, then release to send the final text to the active field. |
 | **Control the pointer** | Move the cursor, click and scroll from the iPhone trackpad. |
-| **Switch apps** | Browse the windows open on your Mac and activate the right target with your thumb. |
-| **See your Mac screen** | Turn on visual feedback only when you need it. |
+| **Switch apps** | Browse the windows open on your computer and activate the right target with your thumb. |
+| **See your computer screen** | Turn on visual feedback only when you need it. |
 | **Keep useful actions close** | Keyboard, Delete, Space, Return and shortcuts stay immediately accessible. |
-| **Switch Macs** | Pair multiple companions and choose the right machine from the My Macs switcher. |
-| **Work remotely** | Prefer the local network, then use your Tailscale tailnet when the Mac is elsewhere. |
+| **Switch computers** | Pair multiple companions and choose the right machine from the computer switcher. |
+| **Work remotely** | Prefer the local network, then use your Tailscale tailnet when the computer is elsewhere. |
 | **Customize controls** | Configure the seven visible buttons and the Global palette with your own keys, labels and icons. |
 
-Your voice never leaves the iPhone. The Mac receives only final text and confirmed commands after pairing has been physically approved.
+Your voice never leaves the iPhone. The companion receives only final text and confirmed commands after pairing has been approved on that computer.
 
 ## How it works
 
-1. Open the Vibe Walkie companion on your Mac.
-2. Scan its QR code with the iPhone; use the Roaming QR code when the Mac is remote.
-3. Approve the iPhone from the request shown on the Mac.
-4. Dictate, point or switch apps from the iPhone.
-5. Repeat pairing on your other Macs, then switch machines from the top-left button.
+1. Install and start the companion on your Mac, Windows PC or Linux server.
+2. Generate its QR code and scan, import or paste it in the iPhone app.
+3. Compare the six digits and approve the request on the computer.
+4. Dictate, point, type or view the screen from the iPhone.
+5. Pair other computers and switch between them from the top-left button.
 
-Optional Roaming mode is configured from the Mac companion. It detects Tailscale without changing your tailnet or ACLs and keeps human approval mandatory for every new iPhone.
-
-```text
-┌──────────────┐   local or Tailscale + TLS 1.3   ┌─────────────────┐
-│    iPhone    │  ─────────────────────────────▶  │       Mac       │
-│ voice + touch│  ◀─────────────────────────────  │ text + control  │
-└──────────────┘       no Vibe Walkie server       └─────────────────┘
-```
+The iPhone's **Install a companion** screen provides the download and instructions for each platform. On Windows/Linux, Tailscale is the default route; an explicit private LAN address is also supported. The companion never changes the tailnet policy.
 
 ## Get the app
 
 ### Official release
 
-- **iPhone** — [available through TestFlight](https://testflight.apple.com/join/9AUshVWm).
-- **Apple silicon Mac** — the free companion will be available from [vibewalkie.app](https://vibewalkie.app) as a signed and notarized DMG.
+- **iPhone** — build `202609111055` is available to invited testers in the internal TestFlight group “Équipe Vibe Walkie”. The current App Store submission is awaiting Apple review.
+- **Mac** — download the native companion from [vibewalkie.app](https://vibewalkie.app/download).
+- **Windows / Linux** — [download the companion](https://github.com/ncleton/vibe-walkie/releases/download/companions-v1.0.0/VibeWalkie-Companions-1.0.0.zip), then follow the [installation guide](Companion/README.md).
 
 The source remains freely buildable with your own Apple Developer account.
 
 ### Build it yourself
 
-The repository contains the iOS app, macOS companion, shared `RemoteCore` protocol, tests and release documentation.
+The repository contains the iOS app, native macOS companion, Python Windows/Linux companion, shared `RemoteCore` protocol, tests and release documentation.
 
 ## Compatibility
 
 - iOS 26 or later;
-- macOS 15 or later;
-- Apple silicon Mac;
-- iPhone and Mac on the same local network for standard operation;
-- for Roaming mode: Tailscale installed separately on both devices, with access to the same tailnet or to a shared Mac.
+- macOS 15 or later for the native Mac companion;
+- an unlocked interactive Windows desktop with Python 3.11 or later;
+- Linux with X11 and AT-SPI, or the supplied VPS desktop launcher;
+- either the same local network or Tailscale installed separately on both devices.
 
-The current protocol is **version 3**. Older versions are intentionally incompatible: update both apps together.
+Windows integration is verified on Server 2025 with real WinForms and WPF editors. Linux is verified on Ubuntu 24.04. Linux dictation requires an AT-SPI EditableText field; terminals use manual typing. Wayland and control across Windows secure-desktop transitions are not supported. See the [capabilities and installation prerequisites](Companion/README.md).
+
+The current protocol is **version 4**. Older versions are intentionally incompatible: update both apps together.
 
 ## Build the project
 
@@ -139,7 +134,7 @@ xcodebuild \
 
 After changing a `project.yml`, run `xcodegen generate` from `iOS/` or `macOS/` and commit the regenerated project as well.
 
-The bundle IDs `com.nicolascleton.viberemote`, `.controls` and `.mac` remain unchanged because they are already tied to the App Store record and local permissions. They are not visible to users. To sign a fork, override the identifier and team in an untracked local configuration.
+The shipping iPhone app uses `app.vibewalkie` and its controls extension uses `app.vibewalkie.controls`. The selected Apple team and entitlements match the current App Store record. Historical Bonjour and Keychain identifiers remain stable for existing pairings. To sign a fork, override the identifiers and team in an untracked local configuration.
 
 ## Repository architecture
 
@@ -147,6 +142,7 @@ The bundle IDs `com.nicolascleton.viberemote`, `.controls` and `.mac` remain unc
 Vibe Walkie
 ├── iOS/                    SwiftUI iPhone app
 ├── macOS/                  SwiftUI Mac companion
+├── Companion/              Windows/Linux companion and VPS launcher
 ├── Packages/RemoteCore/    shared protocol and models
 ├── Store/                  App Store visuals and metadata
 ├── Documentation/          architecture, security and releases
@@ -157,15 +153,15 @@ Learn more: [architecture](Documentation/ARCHITECTURE.md) · [protocol](Document
 
 ## Security and privacy
 
-- TLS 1.3 with an identity unique to each Mac installation;
+- TLS 1.3 with an identity unique to each companion installation;
 - certificate fingerprint included in the pairing QR code;
-- Curve25519-signed messages with sequencing, size limits and rate limiting;
-- explicit approval of every new iPhone on the Mac;
+- Ed25519 challenge authentication, with sequencing, size limits and rate limiting inside pinned TLS;
+- explicit approval of every new iPhone on the computer;
 - target capture and revalidation before inserting dictated text;
 - dictation is rejected in secure fields;
 - no advertising or third-party analytics.
 
-Tailscale is optional and acts only as a network transport. Vibe Walkie receives no Tailscale account, OAuth token or ACL configuration; the Mac's TLS fingerprint remains the authentication authority.
+Tailscale is optional and acts only as a network transport. Vibe Walkie receives no Tailscale account, OAuth token or ACL configuration; the companion's TLS fingerprint remains the authentication authority.
 
 Never publish a vulnerability directly in an issue. Follow the reporting process in [SECURITY.md](SECURITY.md).
 

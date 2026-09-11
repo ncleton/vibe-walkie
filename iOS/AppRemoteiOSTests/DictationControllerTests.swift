@@ -5,6 +5,11 @@ import Speech
 
 @MainActor
 final class DictationControllerTests: XCTestCase {
+    func testTrackpadSpeedsDefaultToMaximum() {
+        XCTAssertEqual(TrackpadSettings.defaultPointerSpeed, TrackpadSettings.pointerRange.upperBound)
+        XCTAssertEqual(TrackpadSettings.defaultScrollSpeed, TrackpadSettings.scrollRange.upperBound)
+    }
+
     func testPinchZoomUsesSymmetricProportionalDeltas() {
         let zoomIn = TrackpadGestureMath.zoomDelta(forIncrementalScale: 1.2)
         let zoomOut = TrackpadGestureMath.zoomDelta(forIncrementalScale: 1 / 1.2)
@@ -30,6 +35,50 @@ final class DictationControllerTests: XCTestCase {
         XCTAssertEqual(drained.scroll, CGPoint(x: -2, y: 8))
         XCTAssertEqual(drained.zoom, 12)
         XCTAssertEqual(drained.drag, CGPoint(x: 5, y: -6))
+        XCTAssertTrue(pending.isEmpty)
+    }
+
+    func testTrackpadDeliveryNeverCapsModernScreensBelowSixtyFPS() {
+        XCTAssertEqual(
+            TrackpadDeliveryPolicy.frameRateRange(maximumSupportedFramesPerSecond: 60),
+            60...60
+        )
+        XCTAssertEqual(
+            TrackpadDeliveryPolicy.frameRateRange(maximumSupportedFramesPerSecond: 120),
+            60...120
+        )
+    }
+
+    func testStationaryLongPressOpensContextMenu() {
+        var state = TrackpadLongPressState()
+        state.begin(at: CGPoint(x: 40, y: 80))
+
+        XCTAssertEqual(state.change(to: CGPoint(x: 43, y: 84)), .pending)
+        XCTAssertTrue(state.presentContextMenuIfPending())
+        XCTAssertFalse(state.presentContextMenuIfPending())
+        XCTAssertEqual(state.end(), .contextMenuPresented)
+    }
+
+    func testMovingLongPressBecomesDragWithoutLosingInitialDistance() {
+        var state = TrackpadLongPressState()
+        state.begin(at: CGPoint(x: 10, y: 20))
+
+        XCTAssertEqual(state.change(to: CGPoint(x: 16, y: 20)), .pending)
+        XCTAssertEqual(state.change(to: CGPoint(x: 19, y: 20)), .dragBegan(CGPoint(x: 9, y: 0)))
+        XCTAssertEqual(state.change(to: CGPoint(x: 21, y: 23)), .dragMoved(CGPoint(x: 2, y: 3)))
+        XCTAssertEqual(state.end(), .dragEnded)
+    }
+
+    func testPointerNetworkBackpressureCoalescesWithoutLosingDistance() {
+        var pending = PointerMoveAccumulator()
+        for _ in 0..<120 {
+            pending.append(deltaX: 0.25, deltaY: -0.5)
+        }
+
+        let payload = pending.drain()
+
+        XCTAssertEqual(payload.deltaX, 30, accuracy: 0.000_001)
+        XCTAssertEqual(payload.deltaY, -60, accuracy: 0.000_001)
         XCTAssertTrue(pending.isEmpty)
     }
 
@@ -109,6 +158,22 @@ final class DictationControllerTests: XCTestCase {
         }())
     }
 
+    func testCaptureStartsBeforeSlowTargetAcknowledgement() async throws {
+        transport.suspendRecordingReply = true
+
+        controller.pressBegan()
+
+        try await waitUntil { self.engine.didStart }
+        XCTAssertTrue(transport.recordingReplyIsPending)
+        XCTAssertTrue(transport.insertPayloads.isEmpty)
+
+        controller.pressEnded()
+        transport.completeRecordingReply()
+
+        try await waitUntil { self.transport.insertPayloads.count == 1 }
+        XCTAssertEqual(transport.insertPayloads.first?.text, "Bonjour depuis le test")
+    }
+
     func testSlideCancellationNeverInsertsText() async throws {
         controller.pressBegan()
         try await waitUntil { self.engine.didStart }
@@ -140,7 +205,7 @@ final class DictationControllerTests: XCTestCase {
         XCTAssertTrue(transport.insertPayloads.isEmpty)
     }
 
-    func testSecureTargetFailurePreventsMicrophoneStart() async throws {
+    func testSecureTargetFailureCancelsMicrophoneWithoutInsertion() async throws {
         transport.recordingError = RemoteErrorPayload(code: .secureField)
         controller.pressBegan()
 
@@ -148,7 +213,8 @@ final class DictationControllerTests: XCTestCase {
             if case .failed = self.controller.phase { return true }
             return false
         }
-        XCTAssertFalse(engine.didStart)
+        XCTAssertTrue(engine.didStart)
+        XCTAssertTrue(engine.didCancel)
         XCTAssertTrue(transport.insertPayloads.isEmpty)
     }
 
@@ -163,6 +229,15 @@ final class DictationControllerTests: XCTestCase {
             return false
         }
         XCTAssertEqual(transport.insertPayloads.count, 1)
+    }
+
+    func testRemoteVoiceControlFailureIsVisibleToTheUser() {
+        controller.reportRemoteControlFailure("Autorisez Vibe Walkie sur le Mac")
+
+        XCTAssertEqual(
+            controller.phase,
+            .failed("Autorisez Vibe Walkie sur le Mac")
+        )
     }
 
     func testUnverifiedInsertionIsNeverReportedAsWritten() async throws {
@@ -328,9 +403,13 @@ private final class FakeDictationTransport: DictationTransport {
     var cancelPayloads: [CancelPayload] = []
     var recordingError: Error?
     var insertError: Error?
+    var suspendRecordingReply = false
     var suspendInsertReply = false
     var insertionIsVerified = true
+    private var recordingContinuation: CheckedContinuation<RemoteEnvelope, Error>?
     private var insertContinuation: CheckedContinuation<RemoteEnvelope, Error>?
+
+    var recordingReplyIsPending: Bool { recordingContinuation != nil }
 
     func send<T: Encodable>(type: RemoteMessageType, payload: T) async throws -> RemoteEnvelope {
         switch type {
@@ -338,19 +417,10 @@ private final class FakeDictationTransport: DictationTransport {
             if let recordingError { throw recordingError }
             let value = try decode(payload, as: RecordingStartedPayload.self)
             recordingPayloads.append(value)
-            return try response(
-                type: .acknowledgement,
-                payload: AcknowledgementPayload(
-                    ok: true,
-                    targetToken: TargetToken(
-                        token: "target-\(recordingPayloads.count)",
-                        applicationName: "Notes",
-                        bundleIdentifier: "com.apple.Notes",
-                        windowTitle: "Note",
-                        expiresAt: Date().addingTimeInterval(120)
-                    )
-                )
-            )
+            if suspendRecordingReply {
+                return try await withCheckedThrowingContinuation { recordingContinuation = $0 }
+            }
+            return try successfulRecordingResponse()
 
         case .insertText:
             let value = try decode(payload, as: InsertTextPayload.self)
@@ -378,6 +448,32 @@ private final class FakeDictationTransport: DictationTransport {
         } catch {
             insertContinuation.resume(throwing: error)
         }
+    }
+
+    func completeRecordingReply() {
+        guard let recordingContinuation else { return }
+        self.recordingContinuation = nil
+        do {
+            recordingContinuation.resume(returning: try successfulRecordingResponse())
+        } catch {
+            recordingContinuation.resume(throwing: error)
+        }
+    }
+
+    private func successfulRecordingResponse() throws -> RemoteEnvelope {
+        try response(
+            type: .acknowledgement,
+            payload: AcknowledgementPayload(
+                ok: true,
+                targetToken: TargetToken(
+                    token: "target-\(recordingPayloads.count)",
+                    applicationName: "Notes",
+                    bundleIdentifier: "com.apple.Notes",
+                    windowTitle: "Note",
+                    expiresAt: Date().addingTimeInterval(120)
+                )
+            )
+        )
     }
 
     private func successfulInsertResponse() throws -> RemoteEnvelope {

@@ -4,26 +4,51 @@
 set -euo pipefail
 
 project_root="${VIBE_WALKIE_PROJECT_ROOT:-/Volumes/Docker/App Remote}"
+credentials="$HOME/Library/Application Support/Vibe Walkie Release Tools/App Store Connect/credentials.env"
 login="$HOME/Library/Keychains/login.keychain-db"
 legacy="$HOME/Library/Keychains/yakacrm-build.keychain-db"
+build_keychain="$HOME/Library/Keychains/vibe-walkie-99QF92KRR7.keychain-db"
+build_keychain_password="$HOME/Library/Application Support/Vibe Walkie Release Tools/Signing/99QF92KRR7/p12.pass"
 log_file="$HOME/Desktop/App Remote iOS archive.log"
 
+if [[ -f "$credentials" ]]; then
+  # shellcheck source=/dev/null
+  source "$credentials"
+fi
+DEVELOPMENT_TEAM="${APPLE_TEAM_ID:-${DEVELOPMENT_TEAM:-99QF92KRR7}}"
+
 restore_keychains() {
-  security list-keychains -d user -s "$legacy" "$login" >/dev/null 2>&1 || true
+  security list-keychains -d user -s "$build_keychain" "$legacy" "$login" >/dev/null 2>&1 || true
 }
 trap restore_keychains EXIT
 
-security list-keychains -d user -s "$login"
+if [[ -f "$build_keychain" && -f "$build_keychain_password" ]]; then
+  security unlock-keychain -p "$(<"$build_keychain_password")" "$build_keychain"
+  security list-keychains -d user -s "$build_keychain" "$login"
+else
+  security list-keychains -d user -s "$login"
+fi
 cd "$project_root"
 
 build="${VIBE_WALKIE_BUILD:-$(date -u +%Y%m%d%H%M)}"
 archive_path="${VIBE_WALKIE_ARCHIVE_PATH:-$project_root/build/OTA/VibeWalkie-1.0.0-$build-macmini.xcarchive}"
 extra_settings=()
+authentication_args=()
 if [[ "${VIBE_WALKIE_OTA:-0}" == "1" ]]; then
   extra_settings+=("SWIFT_ACTIVE_COMPILATION_CONDITIONS=OTA_UPDATES")
 fi
+if [[ -n "${ASC_PRIVATE_KEY_PATH:-}" && -n "${ASC_KEY_ID:-}" && -n "${ASC_ISSUER_ID:-}" ]]; then
+  authentication_args+=(
+    -authenticationKeyPath "$ASC_PRIVATE_KEY_PATH"
+    -authenticationKeyID "$ASC_KEY_ID"
+    -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+  )
+fi
 
 if [[ "${VIBE_WALKIE_EXPORT_ONLY:-0}" != "1" ]]; then
+  POINTER_FLUIDITY_DERIVED_DATA="${TMPDIR:-/tmp}/vibe-walkie-pointer-fluidity-$build.noindex" \
+    "$project_root/scripts/verify-pointer-fluidity.sh" 2>&1 | tee -a "$log_file"
+
   set +u
   xcodebuild archive \
     -project iOS/AppRemoteiOS.xcodeproj \
@@ -32,12 +57,13 @@ if [[ "${VIBE_WALKIE_EXPORT_ONLY:-0}" != "1" ]]; then
     -archivePath "$archive_path" \
     -destination generic/platform=iOS \
     CODE_SIGN_STYLE=Automatic \
-    DEVELOPMENT_TEAM=7XX6KYD3MY \
+    DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
     MARKETING_VERSION=1.0.0 \
     CURRENT_PROJECT_VERSION="$build" \
     "${extra_settings[@]}" \
     -allowProvisioningUpdates \
     -allowProvisioningDeviceRegistration \
+    "${authentication_args[@]}" \
     -quiet 2>&1 | tee "$log_file"
   set -u
   "$project_root/scripts/verify-ios-app-identity.sh" "$archive_path" | tee -a "$log_file"

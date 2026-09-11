@@ -34,6 +34,7 @@ Variables facultatives :
   ASC_KEY_ID=…               identifiant de cette clé
   ASC_ISSUER_ID=…            issuer de l’équipe App Store Connect
   ASC_CREDENTIALS_FILE=…     fichier local chargé automatiquement
+  SKIP_BUILD=1               reprend depuis une archive déjà validée
   INSTALL_AFTER_PUBLISH=1   installe aussi cette build sur ce Mac
 USAGE
 }
@@ -57,6 +58,10 @@ command -v xcodegen >/dev/null
 command -v ssh >/dev/null
 command -v scp >/dev/null
 
+# Empêche une ancienne copie de test d'intercepter le schéma de mise à jour ou
+# de conserver le serveur pendant que la vraie app est publiée/installée.
+"$ROOT_DIR/scripts/cleanup-macos-test-bundles.sh"
+
 STABLE_SPARKLE_BIN="$HOME/Library/Application Support/Vibe Walkie Release Tools/Sparkle-2.9.6/bin"
 SPARKLE_BIN="${SPARKLE_BIN:-$STABLE_SPARKLE_BIN}"
 if [[ ! -x "$SPARKLE_BIN/sign_update" ]]; then
@@ -74,26 +79,56 @@ fi
 }
 codesign --verify --deep --strict "$SPARKLE_BIN/sign_update"
 
-echo "→ Build Vibe Walkie $VERSION ($BUILD)"
 mkdir -p "$BUILD_DIR"
-(
-  cd "$ROOT_DIR/macOS"
-  xcodegen generate
-)
-xcodebuild archive \
-  -project "$ROOT_DIR/macOS/AppRemoteMac.xcodeproj" \
-  -scheme AppRemoteMac \
-  -derivedDataPath "$BUILD_DIR/DerivedData.noindex" \
-  -configuration Release \
-  -destination 'generic/platform=macOS' \
-  -archivePath "$ARCHIVE_PATH" \
-  MARKETING_VERSION="$VERSION" \
-  CURRENT_PROJECT_VERSION="$BUILD" \
-  DEVELOPMENT_TEAM=7XX6KYD3MY \
-  CODE_SIGN_STYLE=Manual \
-  CODE_SIGN_IDENTITY="$SIGN_IDENTITY"
+
+# Bloquant même en reprise d'archive : aucune mise à jour Sparkle ne doit
+# contourner la porte dédiée aux régressions de pointeur.
+POINTER_FLUIDITY_DERIVED_DATA="$BUILD_DIR/PointerFluidityDerivedData.noindex" \
+  "$ROOT_DIR/scripts/verify-pointer-fluidity.sh"
+
+if [[ "${SKIP_BUILD:-0}" == "1" ]]; then
+  [[ -d "$APP_PATH" ]] || {
+    echo "Archive à reprendre introuvable : $APP_PATH" >&2
+    exit 66
+  }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")" == "$VERSION" ]] || {
+    echo "La version de l’archive ne correspond pas à VERSION=$VERSION." >&2
+    exit 65
+  }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")" == "$BUILD" ]] || {
+    echo "Le build de l’archive ne correspond pas à BUILD=$BUILD." >&2
+    exit 65
+  }
+  echo "→ Reprise de l’archive Vibe Walkie $VERSION ($BUILD)"
+else
+  echo "→ Build Vibe Walkie $VERSION ($BUILD)"
+  (
+    cd "$ROOT_DIR/macOS"
+    xcodegen generate
+  )
+  xcodebuild archive \
+    -project "$ROOT_DIR/macOS/AppRemoteMac.xcodeproj" \
+    -scheme AppRemoteMac \
+    -derivedDataPath "$BUILD_DIR/DerivedData.noindex" \
+    -configuration Release \
+    -destination 'generic/platform=macOS' \
+    -archivePath "$ARCHIVE_PATH" \
+    MARKETING_VERSION="$VERSION" \
+    CURRENT_PROJECT_VERSION="$BUILD" \
+    DEVELOPMENT_TEAM=7XX6KYD3MY \
+    CODE_SIGN_STYLE=Manual \
+    CODE_SIGN_IDENTITY="$SIGN_IDENTITY"
+fi
 
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")" == "com.nicolascleton.viberemote.mac" ]] || {
+  echo "L'archive Mac n'utilise pas l'identité de production attendue." >&2
+  exit 65
+}
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP_PATH/Contents/Info.plist")" == "vibewalkie-mac" ]] || {
+  echo "L'archive Mac n'utilise pas le schéma de mise à jour de production." >&2
+  exit 65
+}
 APP_ARCHS="$(lipo -archs "$APP_PATH/Contents/MacOS/Vibe Walkie")"
 [[ " $APP_ARCHS " == *" arm64 "* && " $APP_ARCHS " == *" x86_64 "* ]] || {
   echo "L'archive Mac doit contenir arm64 et x86_64 (reçu : $APP_ARCHS)." >&2
@@ -198,12 +233,25 @@ DOWNLOADED_DMG="$BUILD_DIR/downloaded-$VERSION-$BUILD.dmg"
 curl --fail --silent --show-error "$PUBLIC_BASE_URL/releases/macos/appcast.xml" -o "$APPCAST_PATH"
 APPCAST_BUILD="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@*[local-name()="version"])' "$APPCAST_PATH")"
 APPCAST_SIGNATURE="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@*[local-name()="edSignature"])' "$APPCAST_PATH")"
+APPCAST_CONTENT_TYPE="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@type)' "$APPCAST_PATH")"
 DOWNLOAD_URL="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@url)' "$APPCAST_PATH")"
 [[ "$APPCAST_BUILD" == "$BUILD" && "$APPCAST_SIGNATURE" == "$ED_SIGNATURE" ]] || {
   echo "L’appcast ne correspond pas à la build publiée." >&2
   exit 65
 }
-curl --fail --silent --show-error "$DOWNLOAD_URL" -o "$DOWNLOADED_DMG"
+DOWNLOAD_PATH="${DOWNLOAD_URL%%\?*}"
+[[ "$DOWNLOAD_PATH" == *.dmg && "$APPCAST_CONTENT_TYPE" == "application/x-apple-diskimage" ]] || {
+  echo "L’appcast doit servir une URL .dmg avec le type application/x-apple-diskimage." >&2
+  exit 65
+}
+DOWNLOAD_HEADERS="$BUILD_DIR/download-headers.txt"
+curl --fail --silent --show-error --dump-header "$DOWNLOAD_HEADERS" "$DOWNLOAD_URL" -o "$DOWNLOADED_DMG"
+REMOTE_CONTENT_TYPE="$(awk 'BEGIN { IGNORECASE=1 } /^content-type:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$DOWNLOAD_HEADERS")"
+REMOTE_FILENAME="$(awk 'BEGIN { IGNORECASE=1 } /^content-disposition:/ { sub(/\r$/, ""); value=$0 } END { print value }' "$DOWNLOAD_HEADERS")"
+[[ "$REMOTE_CONTENT_TYPE" == "application/x-apple-diskimage" && "$REMOTE_FILENAME" == *'.dmg"'* ]] || {
+  echo "Le serveur ne renvoie pas un nom et un type de DMG reconnus par Sparkle." >&2
+  exit 65
+}
 "$SPARKLE_BIN/sign_update" --verify "$DOWNLOADED_DMG" "$APPCAST_SIGNATURE"
 cmp -s "$DMG_PATH" "$DOWNLOADED_DMG" || {
   echo "L’archive téléchargée diffère de celle envoyée." >&2
@@ -215,8 +263,13 @@ if [[ "${INSTALL_AFTER_PUBLISH:-0}" == "1" ]]; then
   pkill -x 'Vibe Walkie' 2>/dev/null || true
   rm -rf "/Applications/Vibe Walkie.app"
   ditto "$APP_PATH" "/Applications/Vibe Walkie.app"
-  open "/Applications/Vibe Walkie.app"
+  "$ROOT_DIR/scripts/cleanup-macos-test-bundles.sh" --relaunch-installed
 fi
+
+# xcodebuild archive enregistre également son produit intermédiaire auprès de
+# Launch Services. Il doit être retiré après publication, sinon un lien
+# vibewalkie-mac peut rouvrir l'archive plutôt que /Applications.
+"$ROOT_DIR/scripts/cleanup-macos-test-bundles.sh" --all-registered
 
 echo "✓ Mise à jour mondiale publiée : $VERSION ($BUILD)"
 echo "  Appcast : $PUBLIC_BASE_URL/releases/macos/appcast.xml"

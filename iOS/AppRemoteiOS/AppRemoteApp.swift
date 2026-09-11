@@ -43,6 +43,23 @@ final class VibeWalkieAppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
+/// Distingue un vrai retour d'arrière-plan de l'activation initiale de l'app.
+/// Au lancement, `RemoteHomeView` démarre déjà la connexion : la relancer ici
+/// annulerait inutilement la première tentative Bonjour/TLS.
+struct ForegroundReconnectGate {
+    private(set) var hasEnteredBackground = false
+
+    mutating func didEnterBackground() {
+        hasEnteredBackground = true
+    }
+
+    mutating func consumeReconnectOnActive() -> Bool {
+        guard hasEnteredBackground else { return false }
+        hasEnteredBackground = false
+        return true
+    }
+}
+
 /// Canal privé de développement. Le symbole `OTA_UPDATES` n'est défini que
 /// pour les archives Ad Hoc publiées sur le VPS ; ce code est donc absent des
 /// builds TestFlight et App Store.
@@ -80,9 +97,7 @@ private final class OTAUpdateCoordinator: ObservableObject {
     }
 
     func install() {
-        // iOS peut refuser silencieusement `itms-services` lorsqu'il est
-        // ouvert directement depuis une app. Safari, lui, est le contexte
-        // système prévu pour confirmer une installation OTA. La page stable
+        // Safari affiche la confirmation système de l’installation OTA. La page stable
         // régénère en plus un manifeste signé frais à chaque affichage.
         guard manifestURL != nil,
               let installPageURL = URL(
@@ -98,6 +113,9 @@ private final class OTAUpdateCoordinator: ObservableObject {
 struct VibeWalkieApp: App {
     @UIApplicationDelegateAdaptor(VibeWalkieAppDelegate.self) private var appDelegate
     @StateObject private var client = HostConnectionClient()
+    @StateObject private var health = HealthActivityStore()
+    @StateObject private var purchases = PurchaseManager()
+    @State private var foregroundReconnectGate = ForegroundReconnectGate()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLanguage.storageKey) private var appLanguageIdentifier = AppLanguage.systemIdentifier
 #if !DEBUG && OTA_UPDATES
@@ -115,12 +133,28 @@ struct VibeWalkieApp: App {
         WindowGroup {
             rootContent
                 .environmentObject(client)
+                .environmentObject(health)
+                .environmentObject(purchases)
                 .environment(\.locale, AppLanguage.locale(for: appLanguageIdentifier))
                 .task {
+                    health.updateWorkSessionTracking(
+                        isAppActive: scenePhase == .active,
+                        isConnectedToMac: client.state.isReady
+                            && client.connectedHostPlatform == .macOS
+                    )
                     ControlCenter.shared.reloadAllControls()
 #if !DEBUG && OTA_UPDATES
                     await updater.checkForUpdate()
 #endif
+                }
+                .onChange(of: client.state) { _, state in
+                    health.updateWorkSessionTracking(
+                        isAppActive: scenePhase == .active,
+                        isConnectedToMac: state.isReady
+                            && client.connectedHostPlatform == .macOS
+                    )
+                    guard state.isReady, health.hasRequestedAuthorization else { return }
+                    Task { await health.refresh(using: client) }
                 }
 #if !DEBUG && OTA_UPDATES
                 .alert("ios.update.available", isPresented: $updater.isUpdateAvailable) {
@@ -132,20 +166,50 @@ struct VibeWalkieApp: App {
 #endif
         }
         .onChange(of: scenePhase) { _, phase in
-            // iOS suspend l'application en arrière-plan : la connexion est
-            // rétablie au retour au premier plan plutôt que maintenue en vain.
+            // Une bascule courte vers une autre app ne doit pas casser la
+            // socket. iOS la conserve généralement pendant la suspension et
+            // le client la valide dès le retour au premier plan.
             switch phase {
             case .active:
-                // Une mise à jour ou un redémarrage du compagnon peut laisser
-                // iOS avec une socket apparemment vivante mais inutilisable.
-                // Recréer la connexion au retour au premier plan est rapide et
-                // garantit que le bouton Reconnecter n’est jamais nécessaire.
-                client.resumeAfterForeground()
+                // La valeur réseau peut encore sembler prête pendant les
+                // quelques millisecondes qui précèdent la reconnexion. Le
+                // prochain état `.ready` ouvrira le nouveau créneau fiable.
+                health.updateWorkSessionTracking(
+                    isAppActive: false,
+                    isConnectedToMac: false
+                )
+                // Au lancement à froid, RemoteHomeView a déjà démarré Bonjour.
+                // Ne relancer la socket qu'après un vrai passage en arrière-plan
+                // évite d'annuler cette première tentative 350 ms plus tard.
+                if foregroundReconnectGate.consumeReconnectOnActive() {
+                    client.resumeAfterForeground()
+                }
+                if health.hasRequestedAuthorization {
+                    // HealthKit peut avoir reçu de nouveaux pas pendant que
+                    // l'app était suspendue. La file de rafraîchissement du
+                    // store absorbe la reconnexion Mac si elle arrive en même
+                    // temps, sans perdre l'une des deux mises à jour.
+                    Task { await health.refresh(using: client) }
+                }
 #if !DEBUG && OTA_UPDATES
                 Task { await updater.checkForUpdate() }
 #endif
-            case .background: client.disconnect()
-            default: break
+            case .inactive:
+                health.updateWorkSessionTracking(
+                    isAppActive: false,
+                    isConnectedToMac: false
+                )
+            case .background:
+                foregroundReconnectGate.didEnterBackground()
+                health.updateWorkSessionTracking(
+                    isAppActive: false,
+                    isConnectedToMac: false
+                )
+            @unknown default:
+                health.updateWorkSessionTracking(
+                    isAppActive: false,
+                    isConnectedToMac: false
+                )
             }
         }
     }
@@ -166,23 +230,28 @@ struct VibeWalkieApp: App {
 
 private struct RootView: View {
     @EnvironmentObject private var client: HostConnectionClient
-    @State private var showDiscovery = false
+    @EnvironmentObject private var purchases: PurchaseManager
 
     var body: some View {
         if client.isPaired {
-            RemoteHomeView(client: client)
+            if purchases.hasPremiumAccess {
+                RemoteHomeView(client: client)
+            } else {
+                PremiumLockedHomeView()
+            }
         } else {
-            WelcomeView(showDiscovery: $showDiscovery)
-                .fullScreenCover(isPresented: $showDiscovery) { DiscoveryView() }
+            WelcomeView()
         }
     }
 }
 
 /// Premier lancement : rien d'autre que ce qu'il faut pour se connecter.
-private struct WelcomeView: View {
+struct WelcomeView: View {
     @EnvironmentObject private var client: HostConnectionClient
-    @Binding var showDiscovery: Bool
+    @EnvironmentObject private var purchases: PurchaseManager
     @State private var showScanner = false
+    @State private var showCompanionSetup = false
+    @State private var showPremium = false
 
     var body: some View {
         ZStack {
@@ -233,7 +302,7 @@ private struct WelcomeView: View {
                                     )
                             )
 
-                        Label("ios.download.mac.companion.c5e3804", systemImage: "arrow.down.circle.fill")
+                        Button("ios.companion.install") { showCompanionSetup = true }
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(Color.remoteBlue)
                     }
@@ -265,8 +334,13 @@ private struct WelcomeView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button("ios.explore.without.a.mac.8ed8a17") { showDiscovery = true }
-                        .font(.subheadline.weight(.semibold))
+#if !OTA_UPDATES
+                    Button("premium.view.plans") {
+                        showPremium = true
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.remoteBlue)
+#endif
 
                     Text("ios.open.vibe.walkie.on.your.mac.then.choose.pair.an.f275c3d")
                         .font(.caption)
@@ -280,6 +354,11 @@ private struct WelcomeView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showScanner) {
             PairingScannerView().environmentObject(client)
+        }
+        .sheet(isPresented: $showCompanionSetup) { CompanionSetupView() }
+        .sheet(isPresented: $showPremium) {
+            PremiumPaywallView(canDismiss: true)
+                .environmentObject(purchases)
         }
     }
 

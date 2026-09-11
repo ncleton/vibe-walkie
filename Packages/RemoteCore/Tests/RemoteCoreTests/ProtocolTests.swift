@@ -145,14 +145,65 @@ struct EnvelopeTests {
         #expect(abs(decoded.expiresAt.timeIntervalSince(payload.expiresAt)) < 1)
     }
 
+    @Test("Les créneaux de marche conservent leurs horaires")
+    func workWalkingSessionsRoundTrip() throws {
+        let session = WorkWalkingSession(
+            id: UUID(),
+            startedAt: Date(timeIntervalSince1970: 1_780_000_000),
+            endedAt: Date(timeIntervalSince1970: 1_780_000_600)
+        )
+        let payload = WorkWalkingSessionsSnapshotPayload(sessions: [session])
+        let data = try RemoteCoding.encoder.encode(payload)
+        let decoded = try RemoteCoding.decoder.decode(
+            WorkWalkingSessionsSnapshotPayload.self,
+            from: data
+        )
+
+        #expect(decoded.sessions == [session])
+        #expect(decoded.sessions[0].duration == 600)
+    }
+
+    @Test("Le résumé Santé ne transporte que les agrégats utiles")
+    func healthActivitySnapshotRoundTrip() throws {
+        let payload = HealthActivitySnapshotPayload(
+            briskWalkingMinutesLast7Days: 182,
+            walkingDistanceMetersLast7Days: 9_450,
+            detectedWalkingDurationLast7Days: 14_400
+        )
+        let data = try RemoteCoding.encoder.encode(payload)
+        let decoded = try RemoteCoding.decoder.decode(
+            HealthActivitySnapshotPayload.self,
+            from: data
+        )
+
+        #expect(decoded.briskWalkingMinutesLast7Days == 182)
+        #expect(decoded.walkingDistanceMetersLast7Days == 9_450)
+        #expect(decoded.detectedWalkingDurationLast7Days == 14_400)
+    }
+
     @Test("Tous les types de message ont une valeur brute stable")
     func messageTypesStable() {
         #expect(RemoteMessageType.insertText.rawValue == "insert_text")
         #expect(RemoteMessageType.activateWindow.rawValue == "activate_window")
         #expect(RemoteMessageType.pairingPending.rawValue == "pairing_pending")
+        #expect(RemoteMessageType.voiceControl.rawValue == "voice_control")
         #expect(RemoteMessageType.hostShortcutPress.rawValue == "host_shortcut_press")
-        #expect(RemoteMessageType.allCases.count == 27)
+        #expect(RemoteMessageType.workWalkingSessionsRequest.rawValue == "work_walking_sessions_request")
+        #expect(RemoteMessageType.workWalkingSessionsSnapshot.rawValue == "work_walking_sessions_snapshot")
+        #expect(RemoteMessageType.healthActivitySnapshotUpdate.rawValue == "health_activity_snapshot_update")
+        #expect(RemoteMessageType.allCases.count == 31)
         #expect(ProtocolVersion.current == 4)
+    }
+
+    @Test("Le contrôle vocal reste limité aux fournisseurs et phases connus")
+    func voiceControlRoundTrip() throws {
+        let payload = VoiceControlPayload(provider: .chatGPT, phase: .began)
+        let decoded = try RemoteCoding.decoder.decode(
+            VoiceControlPayload.self,
+            from: RemoteCoding.encoder.encode(payload)
+        )
+
+        #expect(decoded == payload)
     }
 
     @Test("La commande du switcher d'app conserve sa valeur réseau")
@@ -173,6 +224,24 @@ struct EnvelopeTests {
             from: Data(#"{"key":"next_conversation"}"#.utf8)
         )
         #expect(payload.key == .nextConversation)
+    }
+
+    @Test("Les appuis répétés restent compatibles avec les anciens messages")
+    func keyPressRepeatCountRoundTrip() throws {
+        let legacyPayload = try RemoteCoding.decoder.decode(
+            KeyPressPayload.self,
+            from: Data(#"{"key":"arrow_left"}"#.utf8)
+        )
+        #expect(legacyPayload.key == .arrowLeft)
+        #expect(legacyPayload.repeatCount == 1)
+
+        let payload = KeyPressPayload(key: .arrowRight, repeatCount: 12)
+        let decoded = try RemoteCoding.decoder.decode(
+            KeyPressPayload.self,
+            from: RemoteCoding.encoder.encode(payload)
+        )
+        #expect(decoded.key == .arrowRight)
+        #expect(decoded.repeatCount == 12)
     }
 
     @Test("La configuration ne transporte qu'une référence de raccourci hôte")
@@ -222,6 +291,22 @@ struct EnvelopeTests {
         )
         #expect(decoded == status)
         #expect(decoded.hostPlatform == .windows)
+        #expect(decoded.acknowledgesPointerMoves == nil)
+
+        let macStatus = ConnectionStatusPayload(
+            inputControlReady: true,
+            screenCaptureReady: true,
+            hostName: "Mac",
+            hostPlatform: .macOS,
+            capabilities: [.pointer],
+            companionVersion: "1.0.54",
+            acknowledgesPointerMoves: true
+        )
+        let decodedMacStatus = try RemoteCoding.decoder.decode(
+            ConnectionStatusPayload.self,
+            from: RemoteCoding.encoder.encode(macStatus)
+        )
+        #expect(decodedMacStatus.acknowledgesPointerMoves == true)
     }
 
     @Test("Une ancienne configuration reçoit automatiquement l’ordre Global par défaut")
