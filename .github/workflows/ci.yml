@@ -66,6 +66,7 @@ jobs:
           xcodebuild test -project macOS/AppRemoteMac.xcodeproj
           -scheme AppRemoteMac
           -destination 'platform=macOS,arch=arm64'
+          ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
           CODE_SIGNING_ALLOWED=NO
       - name: Interdire les composants du prototype
         run: |

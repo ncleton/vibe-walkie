@@ -27,6 +27,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install './Companion[test]'
+      - name: Install through the shipped Windows installer
+        run: |
+          & ./Companion/scripts/install-windows.ps1 -Python (Get-Command python).Source
+          & "$env:LOCALAPPDATA/VibeWalkie/runtime/Scripts/python.exe" -m pip install 'pytest==9.1.1'
       - name: Require real interactive Win32 control
-        run: python -m pytest -v -o faulthandler_timeout=45 Companion/tests/test_protocol.py Companion/tests/test_windows_integration.py
+        run: '& "$env:LOCALAPPDATA/VibeWalkie/runtime/Scripts/python.exe" -m pytest -v -o faulthandler_timeout=45 --basetemp="${{ runner.temp }}/vibewalkie-tests" Companion/tests/test_protocol.py Companion/tests/test_windows_integration.py'
+      - name: Preserve real Windows screen evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-evidence
+          path: ${{ runner.temp }}/vibewalkie-tests/**/windows-live-screen.png
+          if-no-files-found: warn
