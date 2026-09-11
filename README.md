@@ -12,8 +12,6 @@
 <p align="center">
   <a href="https://vibewalkie.app">Official website</a>
   ·
-  <a href="https://testflight.apple.com/join/9AUshVWm">TestFlight</a>
-  ·
   <a href="#build-the-project">Build the project</a>
   ·
   <a href="CONTRIBUTING.md">Contribute</a>
@@ -84,7 +82,7 @@ The iPhone's **Install a companion** screen provides the download and instructio
 
 ### Official release
 
-- **iPhone** — [available through TestFlight](https://testflight.apple.com/join/9AUshVWm).
+- **iPhone** — build `202609111055` is available to invited testers in the internal TestFlight group “Équipe Vibe Walkie”. The current App Store submission is awaiting Apple review.
 - **Mac** — download the native companion from [vibewalkie.app](https://vibewalkie.app/download).
 - **Windows / Linux** — [download the companion](https://github.com/ncleton/vibe-walkie/releases/download/companions-v1.0.0/VibeWalkie-Companions-1.0.0.zip), then follow the [installation guide](Companion/README.md).
 
@@ -104,7 +102,7 @@ The repository contains the iOS app, native macOS companion, Python Windows/Linu
 
 Windows integration is verified on Server 2025 with real WinForms and WPF editors. Linux is verified on Ubuntu 24.04. Linux dictation requires an AT-SPI EditableText field; terminals use manual typing. Wayland and control across Windows secure-desktop transitions are not supported. See the [capabilities and installation prerequisites](Companion/README.md).
 
-The current protocol is **version 3**. Older versions are intentionally incompatible: update both apps together.
+The current protocol is **version 4**. Older versions are intentionally incompatible: update both apps together.
 
 ## Build the project
 

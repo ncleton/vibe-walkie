@@ -103,7 +103,9 @@ require_source_invariant 'final class ExclusiveProcessLock' "$MAC_APP_SOURCE" \
 require_source_invariant 'NSWorkspace.didLaunchApplicationNotification' "$MAC_APP_SOURCE" \
   "l'app installée ne surveille plus le lancement d'une copie de développement."
 
-"$ROOT_DIR/scripts/cleanup-macos-test-bundles.sh" >/dev/null 2>&1 || true
+for products in "$DERIVED_DATA/Build/Products" "$MAC_DERIVED_DATA/Build/Products"; do
+  VIBE_WALKIE_PRODUCTS_DIR="$products" "$ROOT_DIR/scripts/cleanup-macos-test-bundles.sh" >/dev/null 2>&1 || true
+done
 development_copy_running=0
 while IFS= read -r command; do
   [[ "$command" == *"/Vibe Walkie.app/Contents/MacOS/Vibe Walkie" ]] || continue
