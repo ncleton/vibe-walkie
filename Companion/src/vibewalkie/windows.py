@@ -4,16 +4,18 @@ from ctypes import wintypes as W
 import hashlib
 from pathlib import PureWindowsPath
 import time
+import comtypes
+import comtypes.client
 
 from .protocol import RemoteError, timestamp
 
 
 class WindowsDesktop:
     def __init__(self):
-        import comtypes
-        import comtypes.client
         self.comtypes = comtypes
-        comtypes.CoInitialize()
+        # UIA calls run on one dedicated MTA thread. An STA without a message
+        # pump can deadlock when an out-of-process text provider calls back.
+        comtypes.CoInitializeEx(comtypes.COINIT_MULTITHREADED)
         self.uia_types = comtypes.client.GetModule("UIAutomationCore.dll")
         self.uia = comtypes.client.CreateObject("{FF48DBA4-60EF-4201-AA87-54103EEF594E}", interface=self.uia_types.IUIAutomation)
         self.user = C.WinDLL("user32", use_last_error=True)

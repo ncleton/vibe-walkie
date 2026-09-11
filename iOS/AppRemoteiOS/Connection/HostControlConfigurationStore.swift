@@ -42,9 +42,13 @@ struct HostControlConfigurationStore {
         if defaults.data(forKey: key(selectedHostID)) == nil,
            let data = defaults.data(forKey: legacy) {
             let configuration = try RemoteCoding.decoder.decode(ControlConfiguration.self, from: data)
-            try save(configuration, hostID: selectedHostID, pending: false)
-            if let pendingData = defaults.data(forKey: pending) {
+            let pendingData = defaults.data(forKey: pending)
+            // Validate the complete migration before changing either host key.
+            if let pendingData {
                 _ = try RemoteCoding.decoder.decode(ControlConfiguration.self, from: pendingData)
+            }
+            try save(configuration, hostID: selectedHostID, pending: false)
+            if let pendingData {
                 defaults.set(pendingData, forKey: key(selectedHostID, pending: true))
             }
         }

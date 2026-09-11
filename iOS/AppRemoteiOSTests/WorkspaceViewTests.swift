@@ -58,4 +58,20 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNil(try store.load(hostID: "linux-fingerprint").pending)
         XCTAssertNil(try store.load(hostID: "windows-fingerprint").pending)
     }
+
+    func testCorruptPendingMigrationPreservesOriginalDataForRecovery() throws {
+        let suite = "WorkspaceConfigurationTests.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let valid = try RemoteCoding.encoder.encode(ControlConfiguration.standard)
+        let corrupt = Data("corrupt".utf8)
+        defaults.set(valid, forKey: "controlConfiguration.v1")
+        defaults.set(corrupt, forKey: "controlConfiguration.pending.v1")
+        let store = HostControlConfigurationStore(defaults: defaults)
+        XCTAssertThrowsError(try store.migrateLegacy(selectedHostID: "mac"))
+        XCTAssertThrowsError(try store.migrateLegacy(selectedHostID: "mac"))
+        XCTAssertEqual(defaults.data(forKey: "controlConfiguration.v1"), valid)
+        XCTAssertEqual(defaults.data(forKey: "controlConfiguration.pending.v1"), corrupt)
+        XCTAssertNil(defaults.data(forKey: "controlConfiguration.host.v2.mac"))
+    }
 }
