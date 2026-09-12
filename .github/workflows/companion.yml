@@ -35,7 +35,7 @@ jobs:
         run: '& "$env:LOCALAPPDATA/VibeWalkie/runtime/Scripts/python.exe" -m pytest -v -o faulthandler_timeout=45 --basetemp="${{ runner.temp }}/vibewalkie-tests" Companion/tests/test_protocol.py Companion/tests/test_windows_integration.py'
       - name: Preserve real Windows screen evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-desktop-evidence
           path: ${{ runner.temp }}/vibewalkie-tests/**/windows-live-screen.png
