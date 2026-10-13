@@ -125,5 +125,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" "updates/VibeWalkie-$VERSION.dmg" \
-            --verify-tag --title "Vibe Walkie $VERSION" --notes-file CHANGELOG.md
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Vibe Walkie $VERSION" --notes-file CHANGELOG.md \
+              || gh release view "$GITHUB_REF_NAME" >/dev/null
+          fi
+          gh release upload "$GITHUB_REF_NAME" "updates/VibeWalkie-$VERSION.dmg"

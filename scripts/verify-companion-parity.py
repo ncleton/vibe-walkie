@@ -10,6 +10,7 @@ import sys
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--release', action='store_true')
+parser.add_argument('--preflight', action='store_true')
 args = parser.parse_args()
 reference = json.loads((root / 'Documentation/Validation/windows-parity/mac-reference.json').read_text())
 errors = []
@@ -34,13 +35,15 @@ for wire, name in required.items():
 workflow = (root / '.github/workflows/native-companions.yml').read_text()
 if 'paths:' in workflow:
     errors.append('Windows CI must also run for Mac-only changes; remove path filtering.')
-if args.release:
+if args.release or args.preflight:
     evidence = root / 'Documentation/Validation/windows-parity/release-evidence.json'
     if not evidence.is_file():
         errors.append('Windows release evidence is absent: require real Windows 11 camera, native UI, LAN/Tailscale, UAC/lock/RDP tests, trusted MSIX signature and verified public App Installer.')
     else:
         results = json.loads(evidence.read_text())
-        for gate in ('windows11','camera','native_ui','lan','tailscale','lock_uac_rdp','trusted_msix','public_appinstaller'):
+        gates = ('windows11','camera','native_ui','lan','tailscale','lock_uac_rdp')
+        if args.release: gates += ('trusted_msix','public_appinstaller')
+        for gate in gates:
             if results.get(gate) is not True:
                 errors.append(f'Windows release gate is not validated: {gate}.')
 if errors:

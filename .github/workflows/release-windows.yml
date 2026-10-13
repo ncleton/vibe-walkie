@@ -1,0 +1,85 @@
+name: Release Windows
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build-sign-release:
+    environment: release
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require real Windows readiness and signing configuration
+        env:
+          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          WINDOWS_SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+          WINDOWS_SIGNING_PUBLISHER: ${{ vars.WINDOWS_SIGNING_PUBLISHER }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PASSWORD) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PUBLISHER)) {
+            throw 'Configure the trusted Windows code-signing certificate, password and exact publisher in the release environment.'
+          }
+          python scripts/verify-companion-parity.py --preflight
+          if ($LASTEXITCODE -ne 0) { throw 'Real Windows release evidence is missing or invalid.' }
+      - run: dotnet test Windows/VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj -c Release
+      - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
+      - run: swift test --package-path Shared/PostureCore -c release
+      - run: ./Windows/scripts/build-validation.ps1 -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))"
+      - run: ./Windows/scripts/test-native-window.ps1
+        shell: powershell
+      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
+      - name: Sign and verify trusted MSIX
+        env:
+          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          WINDOWS_SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+          WINDOWS_SIGNING_PUBLISHER: ${{ vars.WINDOWS_SIGNING_PUBLISHER }}
+        run: ./Windows/scripts/package-release.ps1 -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))"
+      - name: Publish Windows assets with the Mac version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $Exists = gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME --verify-tag --title "Vibe Walkie $($env:GITHUB_REF_NAME.TrimStart('v'))" --notes-file CHANGELOG.md
+            if ($LASTEXITCODE -ne 0) {
+              gh release view $env:GITHUB_REF_NAME
+              if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed.' }
+            }
+          }
+          gh release upload $env:GITHUB_REF_NAME build/windows-release/*
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release upload failed.' }
+          gh release view windows-current 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create windows-current --target $env:GITHUB_SHA --prerelease --title 'Vibe Walkie Windows update channel' --notes 'Stable App Installer feed for trusted Windows releases.'
+            if ($LASTEXITCODE -ne 0) { throw 'Windows update channel creation failed.' }
+          }
+          gh release upload windows-current build/windows-release/VibeWalkie-Windows.appinstaller --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Stable Windows update feed publication failed.' }
+      - name: Verify the served Windows artifact and update feed
+        run: |
+          $Version = $env:GITHUB_REF_NAME.TrimStart('v')
+          $Base = "https://github.com/$($env:GITHUB_REPOSITORY)/releases/download/$($env:GITHUB_REF_NAME)"
+          $Downloaded = Join-Path $env:RUNNER_TEMP 'vibewalkie-verified-windows.msix'
+          Invoke-WebRequest "$Base/VibeWalkie-Windows-$Version.msix" -OutFile $Downloaded
+          $Expected = (Get-FileHash "build/windows-release/VibeWalkie-Windows-$Version.msix" -Algorithm SHA256).Hash
+          if ((Get-FileHash $Downloaded -Algorithm SHA256).Hash -ne $Expected) { throw 'The served Windows package does not match the signed release artifact.' }
+          $Feed = Join-Path $env:RUNNER_TEMP 'vibewalkie-verified-windows.appinstaller'
+          Invoke-WebRequest "https://github.com/$($env:GITHUB_REPOSITORY)/releases/download/windows-current/VibeWalkie-Windows.appinstaller" -OutFile $Feed
+          [xml]$Document = Get-Content -Raw $Feed
+          if ($Document.AppInstaller.MainPackage.Version -ne "$Version.0") { throw 'The public Windows update feed serves a different version.' }
+      - name: Retain exact signed-artifact evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-signed-release
+          path: build/windows-release/
+          if-no-files-found: error

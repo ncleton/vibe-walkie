@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Vibe Walkie">
-  <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+  <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" RequestedTheme="Dark">
     <ScrollViewer>
       <StackPanel Spacing="18" Padding="28" MaxWidth="760" HorizontalAlignment="Center">
         <TextBlock Text="Vibe Walkie" FontSize="34" FontWeight="SemiBold" />
@@ -26,6 +26,7 @@
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Démarrer le coach" Click="StartPosture_Click" />
               <Button Content="Arrêter le coach" Click="StopPosture_Click" />
+              <Button Content="Afficher la bulle" Click="ShowPostureBubble_Click" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Enregistrer la bonne posture" Click="CalibratePosture_Click" />

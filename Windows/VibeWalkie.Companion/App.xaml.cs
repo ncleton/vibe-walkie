@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.Windows.AppLifecycle;
 
 namespace VibeWalkie.Companion;
 
@@ -20,6 +21,14 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        var instance = AppInstance.FindOrRegisterForKey("VibeWalkie.Companion");
+        if (!instance.IsCurrent)
+        {
+            await instance.RedirectActivationToAsync(AppInstance.GetCurrent().GetActivatedEventArgs());
+            Environment.Exit(0);
+            return;
+        }
+        instance.Activated += (_, _) => _window?.DispatcherQueue.TryEnqueue(() => _window.ShowFromTray());
         _window = new MainWindow();
         _window.Activate();
         try

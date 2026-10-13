@@ -24,6 +24,10 @@ struct Output: Encodable {
     let hasUpperBody: Bool
     let hasFullBody: Bool
     let enoughLight: Bool
+    let ghostPoints: [String: [Double]]?
+    let currentPoints: [String: [Double]]
+    let frameWidth: Double
+    let frameHeight: Double
 }
 var activity = PostureActivityDetector()
 var evaluation = PostureEvaluationEngine()
@@ -98,7 +102,10 @@ while let line = readLine() {
         let output = Output(phase: phase, progress: progress, activity: walking.rawValue,
             severity: canCalibrate ? result.severity.rawValue : 0, issue: result.primaryIssue?.rawValue,
             viewpoint: viewpoint.rawValue, sound: alerts.shouldPlay(for: result.severity, at: input.timestamp),
-            hasNeck: pose.hasNeck, hasUpperBody: pose.hasUpperBody, hasFullBody: pose.hasFullBody, enoughLight: input.luma >= 0.12)
+            hasNeck: pose.hasNeck, hasUpperBody: pose.hasUpperBody, hasFullBody: pose.hasFullBody, enoughLight: input.luma >= 0.12,
+            ghostPoints: baseline.map { reference in Dictionary(uniqueKeysWithValues: reference.ghostPose.points.map { (key, point) in
+                (key.rawValue, [Double(point.location.x), Double(point.location.y), Double(point.confidence)])
+            }) }, currentPoints: input.points, frameWidth: input.frameSize[0], frameHeight: input.frameSize[1])
         print(String(decoding: try encoder.encode(output), as: UTF8.self))
         fflush(stdout)
     } catch {

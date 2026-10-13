@@ -7,7 +7,9 @@ using VibeWalkie.Protocol;
 namespace VibeWalkie.Companion.Posture;
 
 public sealed record PosturePresentation(string Phase, double Progress, string Activity, int Severity,
-    string? Issue, string Viewpoint, bool Sound, bool HasNeck, bool HasUpperBody, bool HasFullBody, bool EnoughLight);
+    string? Issue, string Viewpoint, bool Sound, bool HasNeck, bool HasUpperBody, bool HasFullBody, bool EnoughLight,
+    IReadOnlyDictionary<string, double[]>? GhostPoints = null, IReadOnlyDictionary<string, double[]>? CurrentPoints = null,
+    double FrameWidth = 640, double FrameHeight = 480);
 
 public sealed class PostureCoachService(WorkWalkingSessionStore walking) : IAsyncDisposable
 {

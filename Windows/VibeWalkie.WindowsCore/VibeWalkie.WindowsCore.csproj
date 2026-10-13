@@ -21,7 +21,7 @@
     <Compile Include="../VibeWalkie.Companion/TailscaleDetector.cs" Link="TailscaleDetector.cs" />
     <Compile Include="../VibeWalkie.Companion/Accessibility/*.cs" Link="Accessibility/%(Filename)%(Extension)" />
     <Compile Include="../VibeWalkie.Companion/VoiceActions/*.cs" Link="VoiceActions/%(Filename)%(Extension)" />
-    <Compile Include="../VibeWalkie.Companion/Posture/*.cs" Link="Posture/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/Posture/*.cs" Exclude="../VibeWalkie.Companion/Posture/PostureBubbleWindow.cs" Link="Posture/%(Filename)%(Extension)" />
     <Compile Include="../VibeWalkie.Companion/Health/*.cs" Link="Health/%(Filename)%(Extension)" />
     <Compile Include="../VibeWalkie.Companion/Input/*.cs" Link="Input/%(Filename)%(Extension)" />
     <Compile Include="../VibeWalkie.Companion/Network/*.cs" Link="Network/%(Filename)%(Extension)" />

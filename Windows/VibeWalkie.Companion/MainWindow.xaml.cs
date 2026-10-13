@@ -20,6 +20,7 @@ namespace VibeWalkie.Companion;
 public sealed partial class MainWindow : Window
 {
     private CompanionRuntime? _runtime;
+    private PostureBubbleWindow? _postureBubble;
     private readonly TrayIconService _tray;
     private uint? _shortcutKey;
     private IReadOnlyList<string> _shortcutModifiers = [];
@@ -72,7 +73,7 @@ public sealed partial class MainWindow : Window
             using var stream = new MemoryStream(preview); var image = new BitmapImage();
             await image.SetSourceAsync(stream.AsRandomAccessStream()); CameraPreview.Source = image;
             CalibrationProgress.Value = presentation.Progress;
-            PostureStatus.Text = $"{PhaseLabel(presentation.Phase)} — {presentation.Viewpoint} — {(presentation.Activity == "walking" ? "Marche détectée" : "À l’arrêt")}"
+            PostureStatus.Text = $"{PhaseLabel(presentation.Phase)} — {ViewpointLabel(presentation.Viewpoint)} — {(presentation.Activity == "walking" ? "Marche détectée" : "À l’arrêt")}"
                 + (presentation.Issue is null ? "" : " — " + IssueLabel(presentation.Issue));
             if (!presentation.EnoughLight) PostureStatus.Text += " — Augmentez l’éclairage";
             if (!presentation.HasNeck) PostureStatus.Text += " — Gardez la tête et les épaules dans le cadre";
@@ -233,6 +234,7 @@ public sealed partial class MainWindow : Window
         RemoteKey.ArrowLeft => "Gauche", RemoteKey.ArrowRight => "Droite", RemoteKey.Space => "Espace", RemoteKey.Copy => "Copier", RemoteKey.Paste => "Coller",
         RemoteKey.Cut => "Couper", RemoteKey.SelectAll => "Tout sélectionner", RemoteKey.RightClick => "Clic droit", RemoteKey.CloseWindow => "Fermer la fenêtre", _ => throw new InvalidOperationException("Commande inconnue.")
     };
+    public void ShowFromTray() { _tray.ShowWindow(); Activate(); }
     public void ShowFailure(string detail) { StatusBar.Title = detail; StatusBar.Severity = InfoBarSeverity.Error; StatusBar.IsOpen = true; }
     private async void RefreshCameras_Click(object sender, RoutedEventArgs e)
     {
@@ -253,6 +255,12 @@ public sealed partial class MainWindow : Window
     private async void StopPosture_Click(object sender, RoutedEventArgs e)
     {
         if (_runtime is not null) await _runtime.Posture.DisposeAsync(); CameraPreview.Source = null; PostureStatus.Text = "Coach arrêté";
+    }
+    private void ShowPostureBubble_Click(object sender, RoutedEventArgs e)
+    {
+        if (_runtime is null) return;
+        if (_postureBubble is null) { _postureBubble = new PostureBubbleWindow(_runtime.Posture); _postureBubble.Closed += (_, _) => _postureBubble = null; }
+        _postureBubble.Activate();
     }
     private void CalibratePosture_Click(object sender, RoutedEventArgs e) => _runtime?.Posture.Calibrate(false);
     private void CalibrateLean_Click(object sender, RoutedEventArgs e) => _runtime?.Posture.Calibrate(true);
@@ -298,6 +306,7 @@ public sealed partial class MainWindow : Window
     }
     private async void Quit_Click(object sender, RoutedEventArgs e) => await QuitAsync();
     private async Task QuitAsync() { if (_runtime is not null) await _runtime.DisposeAsync(); _tray.Dispose(); Application.Current.Exit(); }
+    private static string ViewpointLabel(string viewpoint) => viewpoint switch { "front" => "Face", "profile" => "Profil", "back" => "Dos", "threeQuarter" => "Trois quarts", _ => "Angle à vérifier" };
     private static string PhaseLabel(string phase) => phase switch { "positioning" => "Ajustez le cadrage", "calibratingStatic" => "Calibration de la bonne posture", "awaitingLeanSample" => "Enregistrez votre posture penchée", "calibratingLean" => "Apprentissage de la posture penchée", "calibratingWalking" => "Calibration de la marche", "monitoring" => "Surveillance active", _ => phase };
     private static string IssueLabel(string issue) => issue switch { "neckForward" => "Cou vers l’avant", "headDown" => "Tête baissée", "headTurned" => "Tête tournée", "trunkInclined" => "Buste incliné", _ => issue };
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool MessageBeep(uint type);

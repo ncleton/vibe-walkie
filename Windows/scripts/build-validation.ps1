@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$Version = "1.0.76")
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -14,7 +14,7 @@ try {
     Run-Checked { python Windows/scripts/fetch-models.py }
     Run-Checked { python -m PyInstaller --noconfirm --clean --onedir --name VibeWalkieVision --collect-all mediapipe --collect-all pygrabber --distpath build/vision Windows/Vision/vision_worker.py }
     Run-Checked { swift build --package-path Shared/PostureCore -c release }
-    Run-Checked { dotnet publish Windows/VibeWalkie.Companion/VibeWalkie.Companion.csproj -c Release -r win-x64 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true -p:SelfContained=true -p:PublishTrimmed=false -o $Output }
+    Run-Checked { dotnet publish Windows/VibeWalkie.Companion/VibeWalkie.Companion.csproj -c Release -r win-x64 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true -p:SelfContained=true -p:PublishTrimmed=false -p:Version=$Version -p:AssemblyVersion="$Version.0" -p:FileVersion="$Version.0" -o $Output }
     $Vision = Join-Path $Output 'Vision'
     New-Item -ItemType Directory -Force $Vision | Out-Null
     Copy-Item build/vision/VibeWalkieVision/* $Vision -Recurse -Force

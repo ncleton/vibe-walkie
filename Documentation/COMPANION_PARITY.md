@@ -35,9 +35,9 @@ publication. Ne pas annoncer un codec que le backend ne peut pas produire.
 La présence d’une route protocolaire et une compilation ne suffisent pas à
 annoncer l’identité de comportement. Les sous-actions de téléversement, raccourcis dictés et coordonnées explicites
 sont implémentées mais attendent les parcours réels Windows. Le contrôle précis
-des onglets doit être comparé avec la lecture native et le pont Chrome du Mac. L’interface doit être vérifiée pour
-l’ordre et les icônes des commandes, la bulle de posture et les préférences
-persistantes. Les assertions de résultat doivent porter sur les vrais contrôles
+des onglets doit être comparé avec la lecture native et le pont Chrome du Mac. L’interface implémente l’ordre et les icônes des commandes, la bulle de posture
+avec référence calibrée et les préférences persistantes ; leur rendu et leur
+parcours doivent être vérifiés sur Windows. Les assertions de résultat doivent porter sur les vrais contrôles
 Windows, sans simulation ni succès supposé.
 
 Le moteur de posture Swift est partagé par identité de source, mais les
