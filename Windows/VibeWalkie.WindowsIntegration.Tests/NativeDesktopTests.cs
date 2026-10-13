@@ -25,12 +25,11 @@ public sealed class NativeDesktopTests
             $form.Add_Shown({ $form.Activate(); $text.Focus(); $text.Select($text.TextLength, 0) })
             [System.Windows.Forms.Application]::Run($form)
             """);
-        var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = false };
-        foreach (var argument in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script }) start.ArgumentList.Add(argument);
-        using var editor = Process.Start(start) ?? throw new InvalidOperationException("Real Windows editor did not start.");
+        using var editor = DesktopEditorProcess.Start(script);
         try
         {
             var capture = new TargetCaptureService(); var input = new InputService(); TargetToken? token = null;
+            string? lastCaptureError = null;
             for (var attempt = 0; attempt < 100; attempt++)
             {
                 try
@@ -38,10 +37,11 @@ public sealed class NativeDesktopTests
                     token = capture.Capture();
                     if (token.ApplicationName.Contains("powershell", StringComparison.OrdinalIgnoreCase)) break;
                 }
-                catch (ProtocolException) { }
+                catch (ProtocolException error) { lastCaptureError = $"{error.Code}: {error.Message}"; }
                 await Task.Delay(100, TestContext.Current.CancellationToken);
             }
-            Assert.NotNull(token); Assert.Contains("powershell", token.ApplicationName, StringComparison.OrdinalIgnoreCase);
+            Assert.True(token is not null, $"The real editor was not captured. Last error: {lastCaptureError}; exited: {editor.HasExited}");
+            Assert.Contains("powershell", token.ApplicationName, StringComparison.OrdinalIgnoreCase);
             var target = capture.Resolve(token.Token);
             Assert.True(input.InsertText("Bonjour été 🌍\nEncore café", target).Verified);
             Assert.Contains("Bonjour été 🌍", TargetCaptureService.ReadText(target.Element).Text);

@@ -5,6 +5,7 @@ Add-Type -AssemblyName UIAutomationTypes
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $Executable = Join-Path $Root 'build/windows-native-validation/VibeWalkie.Companion.exe'
 $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH = Join-Path $env:RUNNER_TEMP 'vibewalkie-ui-startup.log'
+if (Test-Path $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH) { Remove-Item -LiteralPath $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH }
 $Process = Start-Process -FilePath $Executable -PassThru
 try {
     $Window = $null
@@ -26,6 +27,19 @@ try {
         Write-Output "UI process session: $($Process.SessionId); test session: $((Get-Process -Id $PID).SessionId)"
         throw 'The real WinUI window did not become accessible.'
     }
+    $RuntimeStarted = $false
+    for ($Attempt = 0; $Attempt -lt 300; $Attempt++) {
+        if (Test-Path $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH) {
+            $Stages = @(Get-Content -LiteralPath $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH)
+            if ($Stages -match " $($Process.Id) runtime_error_") {
+                $Stages | Write-Output
+                throw 'The actual companion displayed a window but its runtime failed to start.'
+            }
+            if ($Stages -match " $($Process.Id) runtime_started$") { $RuntimeStarted = $true; break }
+        }
+        Start-Sleep -Milliseconds 100
+    }
+    if (-not $RuntimeStarted) { throw 'The actual companion runtime did not start.' }
     $Condition = [System.Windows.Automation.PropertyCondition]::new(
         [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
         [System.Windows.Automation.ControlType]::Button)
@@ -36,7 +50,7 @@ try {
     }
     # Only UI control names are exported. Never export the generated pairing QR,
     # confirmation secret, TLS identity, screenshots or the user's camera.
-    @{ nativeWindow = $true; title = $Window.Current.Name; requiredControls = $true } |
+    @{ nativeWindow = $true; title = $Window.Current.Name; requiredControls = $true; runtimeStarted = $true } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'build/windows-native-validation/native-window-evidence.json') -Encoding utf8
 } finally {
     if (-not $Process.HasExited) { Stop-Process -Id $Process.Id -Force }
