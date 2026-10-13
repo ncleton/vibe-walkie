@@ -13,9 +13,13 @@ public sealed class TrayIconService : IDisposable
 
     public TrayIconService(Window window)
     {
+        LocalDiagnostics.StartupStage("tray_window_handle_start");
         _window = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        LocalDiagnostics.StartupStage("tray_window_handle_ready");
         _procedure = WindowProcedure;
-        _ = Native.SetWindowSubclass(_window, _procedure, 1, 0);
+        if (!Native.SetWindowSubclass(_window, _procedure, 1, 0)) throw new InvalidOperationException("Windows refuse l’intégration de l’icône de notification. Relancez Vibe Walkie dans votre session utilisateur.");
+        LocalDiagnostics.StartupStage("tray_subclass_ready");
+        LocalDiagnostics.StartupStage("tray_icon_load_start");
         _icon = new Native.NotifyIconData
         {
             Size = (uint)Marshal.SizeOf<Native.NotifyIconData>(),
@@ -26,7 +30,9 @@ public sealed class TrayIconService : IDisposable
             Icon = Native.LoadImage(0, Path.Combine(AppContext.BaseDirectory, "Assets", "VibeWalkie.ico"), 1, 32, 32, 0x10),
             Tip = "Vibe Walkie — compagnon Windows",
         };
-        _ = Native.ShellNotifyIcon(0, ref _icon);
+        LocalDiagnostics.StartupStage("tray_icon_loaded");
+        if (!Native.ShellNotifyIcon(0, ref _icon)) throw new InvalidOperationException("La zone de notification Windows est indisponible. Vérifiez que l’Explorateur Windows est actif dans votre session, puis relancez Vibe Walkie.");
+        LocalDiagnostics.StartupStage("tray_icon_registered");
     }
 
     public event Action? QuitRequested;

@@ -21,7 +21,7 @@ public sealed partial class MainWindow : Window
 {
     private CompanionRuntime? _runtime;
     private PostureBubbleWindow? _postureBubble;
-    private readonly TrayIconService _tray;
+    private TrayIconService? _tray;
     private uint? _shortcutKey;
     private IReadOnlyList<string> _shortcutModifiers = [];
 
@@ -30,17 +30,23 @@ public sealed partial class MainWindow : Window
         LocalDiagnostics.StartupStage("window_constructor");
         InitializeComponent();
         LocalDiagnostics.StartupStage("window_xaml_ready");
-        _tray = new TrayIconService(this);
+    }
+
+    public void InitializeTray()
+    {
+        if (_tray is not null) return;
+        var tray = new TrayIconService(this);
+        _tray = tray;
         LocalDiagnostics.StartupStage("tray_ready");
-        _tray.QuitRequested += async () => await QuitAsync();
+        tray.QuitRequested += async () => await QuitAsync();
         var handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var id = Win32Interop.GetWindowIdFromWindow(handle);
         AppWindow.GetFromWindowId(id).Closing += (_, args) =>
         {
-            if (_tray.ShouldCancelClose())
+            if (tray.ShouldCancelClose())
             {
                 args.Cancel = true;
-                _tray.HideWindow();
+                tray.HideWindow();
             }
         };
     }
@@ -237,7 +243,11 @@ public sealed partial class MainWindow : Window
         RemoteKey.ArrowLeft => "Gauche", RemoteKey.ArrowRight => "Droite", RemoteKey.Space => "Espace", RemoteKey.Copy => "Copier", RemoteKey.Paste => "Coller",
         RemoteKey.Cut => "Couper", RemoteKey.SelectAll => "Tout sélectionner", RemoteKey.RightClick => "Clic droit", RemoteKey.CloseWindow => "Fermer la fenêtre", _ => throw new InvalidOperationException("Commande inconnue.")
     };
-    public void ShowFromTray() { _tray.ShowWindow(); Activate(); }
+    public void ShowFromTray()
+    {
+        if (_tray is null) throw new InvalidOperationException("L’icône de notification Windows n’est pas initialisée. Relancez le compagnon.");
+        _tray.ShowWindow(); Activate();
+    }
     public void ShowFailure(string detail) { StatusBar.Title = detail; StatusBar.Severity = InfoBarSeverity.Error; StatusBar.IsOpen = true; }
     private async void RefreshCameras_Click(object sender, RoutedEventArgs e)
     {
@@ -308,7 +318,7 @@ public sealed partial class MainWindow : Window
         catch (Exception error) { ShowFailure(error.Message); }
     }
     private async void Quit_Click(object sender, RoutedEventArgs e) => await QuitAsync();
-    private async Task QuitAsync() { if (_runtime is not null) await _runtime.DisposeAsync(); _tray.Dispose(); Application.Current.Exit(); }
+    private async Task QuitAsync() { if (_runtime is not null) await _runtime.DisposeAsync(); _tray?.Dispose(); Application.Current.Exit(); }
     private static string ViewpointLabel(string viewpoint) => viewpoint switch { "front" => "Face", "profile" => "Profil", "back" => "Dos", "threeQuarter" => "Trois quarts", _ => "Angle à vérifier" };
     private static string PhaseLabel(string phase) => phase switch { "positioning" => "Ajustez le cadrage", "calibratingStatic" => "Calibration de la bonne posture", "awaitingLeanSample" => "Enregistrez votre posture penchée", "calibratingLean" => "Apprentissage de la posture penchée", "calibratingWalking" => "Calibration de la marche", "monitoring" => "Surveillance active", _ => phase };
     private static string IssueLabel(string issue) => issue switch { "neckForward" => "Cou vers l’avant", "headDown" => "Tête baissée", "headTurned" => "Tête tournée", "trunkInclined" => "Buste incliné", _ => issue };

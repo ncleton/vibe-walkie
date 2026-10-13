@@ -38,6 +38,7 @@ public partial class App : Application
         LocalDiagnostics.StartupStage("window_activated");
         try
         {
+            _window.InitializeTray();
             Runtime = new CompanionRuntime(_window.DispatcherQueue);
             _window.Bind(Runtime);
             LocalDiagnostics.StartupStage("runtime_bound");
