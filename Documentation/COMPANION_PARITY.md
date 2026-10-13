@@ -52,6 +52,9 @@ chaque PR et chaque changement de main, y compris un changement Mac seul.
 révision du manifeste et des adaptations Windows. Il vérifie les routes Windows
 et l’absence de filtre de chemins dans le workflow. Les tests fonctionnels
 et le contrôle de livraison restent distincts.
+Le workflow de publication Mac attend le succès de la livraison Windows signée
+de la même version et du même commit avant de publier son canal. Le script
+`require-windows-release.py` vérifie également la preuve publique Windows.
 
 `python3 scripts/verify-companion-parity.py --release` refuse une livraison tant
 que les preuves Windows 11, caméra, interface, LAN, Tailscale, verrouillage/UAC/RDP,

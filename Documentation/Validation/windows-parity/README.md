@@ -19,6 +19,8 @@ Le contrôle de parité surveille les fichiers Mac du dépôt, les routes V4 et
 l’identité du moteur de posture Swift partagé. Sur la machine de publication,
 `--mac-source "/Volumes/Docker/App Remote"` vérifie aussi la source Mac actuelle.
 La CI native s’exécute sur tous les changements, y compris ceux du Mac seul.
+Le workflow de livraison Mac attend aussi la livraison Windows signée réussie
+de la même version et du même commit avant de publier le canal Mac.
 
 ## Vérifications réalisées
 

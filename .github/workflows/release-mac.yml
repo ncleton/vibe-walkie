@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build-notarize-release:
@@ -16,6 +17,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Exiger la validation conjointe Mac et Windows
+        run: python3 scripts/verify-companion-parity.py --preflight
       - name: Sélectionner Xcode 26
         run: |
           XCODE_APP="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort | tail -1)"
@@ -102,6 +105,10 @@ jobs:
           ED_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<< "$SIGNATURE_OUTPUT")"
           [[ -n "$ED_SIGNATURE" ]]
           echo "ED_SIGNATURE=$ED_SIGNATURE" >> "$GITHUB_ENV"
+      - name: Exiger la livraison Windows signée du même commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/require-windows-release.py
       - name: Publier sur le canal mondial VPS
         env:
           RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
