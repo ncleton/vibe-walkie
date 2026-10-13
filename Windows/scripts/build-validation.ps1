@@ -10,6 +10,7 @@ function Run-Checked([scriptblock]$Command) {
 }
 Push-Location $Root
 try {
+    if (Test-Path -LiteralPath $Output) { Remove-Item -LiteralPath $Output -Recurse -Force }
     Run-Checked { python -m pip install -r Windows/Vision/requirements.txt }
     Run-Checked { python Windows/scripts/fetch-models.py }
     Run-Checked { python -m PyInstaller --noconfirm --clean --onedir --name VibeWalkieVision --collect-all mediapipe --collect-all pygrabber --distpath build/vision Windows/Vision/vision_worker.py }
@@ -23,15 +24,13 @@ try {
     $Core = Join-Path $Output 'PostureCore'
     New-Item -ItemType Directory -Force $Core | Out-Null
     $BinPath = (& swift build --package-path Shared/PostureCore -c release --show-bin-path).Trim()
-    Copy-Item (Join-Path $BinPath 'PostureCore.exe') $Core
     $Target = & swift -print-target-info | ConvertFrom-Json
     $SwiftBin = Split-Path (Get-Command swift).Source -Parent
     $RuntimePaths = @($Target.paths.runtimeLibraryPaths) + @($SwiftBin, (Join-Path $env:SDKROOT 'usr/bin'))
-    foreach ($RuntimePath in $RuntimePaths | Select-Object -Unique) {
-        if (Test-Path -LiteralPath $RuntimePath) {
-            Get-ChildItem -LiteralPath $RuntimePath -Filter '*.dll' | Copy-Item -Destination $Core -Force
-        }
-    }
+    $RuntimeArguments = @('Windows/scripts/bundle-swift-runtime.py', '--executable', (Join-Path $BinPath 'PostureCore.exe'), '--destination', $Core)
+    foreach ($RuntimePath in $RuntimePaths | Select-Object -Unique) { $RuntimeArguments += @('--runtime-dir', $RuntimePath) }
+    & python @RuntimeArguments
+    if ($LASTEXITCODE -ne 0) { throw 'The required Swift runtime dependency closure could not be bundled.' }
     if (-not (Test-Path (Join-Path $Core 'swiftCore.dll'))) { throw 'The self-contained posture runtime is incomplete: swiftCore.dll is missing.' }
     & (Join-Path $PSScriptRoot 'test-bundled-components.ps1') -Bundle $Output
     $Files = Get-ChildItem $Output -Recurse -File | ForEach-Object {

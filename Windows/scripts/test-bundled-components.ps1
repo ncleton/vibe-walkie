@@ -2,7 +2,7 @@
 param([Parameter(Mandatory)][string]$Bundle)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-function Run-Bundled([string]$Executable, [string[]]$Arguments) {
+function Run-Bundled([string]$Executable, [string[]]$Arguments, [string]$InputData = '') {
     $Start = [System.Diagnostics.ProcessStartInfo]::new($Executable)
     $Start.UseShellExecute = $false
     $Start.CreateNoWindow = $true
@@ -14,6 +14,7 @@ function Run-Bundled([string]$Executable, [string[]]$Arguments) {
     foreach ($Argument in $Arguments) { $Start.ArgumentList.Add($Argument) }
     $Process = [System.Diagnostics.Process]::Start($Start)
     try {
+        if ($InputData.Length -gt 0) { $Process.StandardInput.WriteLine($InputData) }
         $Process.StandardInput.Close()
         $Output = $Process.StandardOutput.ReadToEndAsync()
         $Errors = $Process.StandardError.ReadToEndAsync()
@@ -39,4 +40,15 @@ $null = $CameraList | ConvertFrom-Json
 $Core = Join-Path $Bundle 'PostureCore/PostureCore.exe'
 $Output = Run-Bundled $Core @()
 if (-not [string]::IsNullOrWhiteSpace($Output)) { throw 'The bundled posture engine returned unexpected output without input.' }
+# Exercise the packaged JSON loop, independently of the algorithm unit tests.
+# Empty detections and invalid JSON are protocol fixtures, not camera evidence.
+$Frames = '{"timestamp":1,"points":{},"luma":0.8,"frameSize":[640,480]}' + "`n" + 'invalid-json'
+$Responses = @((Run-Bundled -Executable $Core -Arguments @() -InputData $Frames).Trim() -split "`n")
+if ($Responses.Count -ne 2) { throw 'The packaged posture engine did not answer both protocol inputs.' }
+$Observation = $Responses[0] | ConvertFrom-Json
+if ($Observation.phase -ne 'positioning' -or $Observation.hasNeck -ne $false -or $Observation.severity -ne 0) {
+    throw 'The packaged posture engine did not preserve the no-detection state.'
+}
+$Invalid = $Responses[1] | ConvertFrom-Json
+if ([string]::IsNullOrWhiteSpace($Invalid.error)) { throw 'The packaged posture engine did not explicitly reject invalid JSON.' }
 Write-Output 'The packaged camera worker and shared posture engine run without the CI toolchain on PATH. Physical camera validation is still required.'
