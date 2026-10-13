@@ -1,0 +1,47 @@
+name: Native Mac and Windows parity
+on:
+  push:
+    branches: [main, codex/windows-mac-parity]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: python3 scripts/verify-companion-parity.py
+      - run: dotnet test Windows/VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj -c Release
+      - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
+      - run: swift test --package-path Shared/PostureCore -c release
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/verify-companion-parity.py
+      - run: dotnet test Windows/VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj -c Release
+      - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
+      - run: dotnet build Windows/VibeWalkie.WindowsCore/VibeWalkie.WindowsCore.csproj -c Release
+      - run: swift test --package-path Shared/PostureCore -c release
+      - run: ./Windows/scripts/build-validation.ps1
+      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-native-validation
+          path: build/windows-native-validation/
+          if-no-files-found: error

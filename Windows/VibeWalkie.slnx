@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="VibeWalkie.Protocol/VibeWalkie.Protocol.csproj" />
+  <Project Path="VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj" />
+  <Project Path="VibeWalkie.WindowsCore/VibeWalkie.WindowsCore.csproj" />
+  <Project Path="VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj" />
+  <Project Path="VibeWalkie.Companion/VibeWalkie.Companion.csproj" />
+</Solution>

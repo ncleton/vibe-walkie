@@ -1,0 +1,4 @@
+mediapipe==1.1.0
+opencv-python==5.0.0.93
+pygrabber==0.2
+pyinstaller==6.22.3

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.26100.0</TargetPlatformMinVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../VibeWalkie.Protocol/VibeWalkie.Protocol.csproj" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+    <PackageReference Include="QRCoder" Version="1.7.0" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <PackageReference Include="Interop.UIAutomationClient" Version="10.19041.0" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../VibeWalkie.Companion/ConfigurationStore.cs" Link="ConfigurationStore.cs" />
+    <Compile Include="../VibeWalkie.Companion/LocalDiagnostics.cs" Link="LocalDiagnostics.cs" />
+    <Compile Include="../VibeWalkie.Companion/TailscaleDetector.cs" Link="TailscaleDetector.cs" />
+    <Compile Include="../VibeWalkie.Companion/Accessibility/*.cs" Link="Accessibility/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/VoiceActions/*.cs" Link="VoiceActions/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/Posture/*.cs" Link="Posture/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/Health/*.cs" Link="Health/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/Input/*.cs" Link="Input/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/Network/*.cs" Link="Network/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/Screen/*.cs" Link="Screen/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/Security/*.cs" Link="Security/%(Filename)%(Extension)" />
+    <Compile Include="../VibeWalkie.Companion/Windows/*.cs" Link="Windows/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

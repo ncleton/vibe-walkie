@@ -1,0 +1,97 @@
+import Foundation
+
+// Dedicated local process: this is the same calibrated posture and walking
+// engine as macOS. Neither landmarks nor video are stored by this process.
+struct Input: Decodable {
+    let command: String?
+    let timestamp: Double
+    let points: [String: [Double]]
+    let world: [String: [Float]]?
+    let face: [Double]?
+    let luma: Double
+    let frameSize: [Double]
+    let sensitivity: String?
+}
+struct Output: Encodable {
+    let phase: String
+    let progress: Double
+    let activity: String
+    let severity: Int
+    let issue: String?
+    let viewpoint: String
+    let sound: Bool
+    let hasNeck: Bool
+    let hasUpperBody: Bool
+    let hasFullBody: Bool
+    let enoughLight: Bool
+}
+var activity = PostureActivityDetector()
+var evaluation = PostureEvaluationEngine()
+var calibration = PostureCalibrationAccumulator()
+var smoothing = PostureMetricSmoother()
+var alerts = PostureCorrectionSoundGate()
+var baseline: PostureBaseline?
+var phase = "positioning"
+var calibrationStarted: Double?
+let encoder = JSONEncoder()
+encoder.outputFormatting = [.sortedKeys]
+while let line = readLine() {
+    do {
+        let input = try JSONDecoder().decode(Input.self, from: Data(line.utf8))
+        let points = Dictionary(uniqueKeysWithValues: input.points.compactMap { key, value -> (PoseJoint, PosePoint)? in
+            guard let joint = PoseJoint(rawValue: key), value.count == 3, value.allSatisfy(\.isFinite) else { return nil }
+            return (joint, PosePoint(location: CGPoint(x: value[0], y: value[1]), confidence: Float(value[2])))
+        })
+        let pose = TrackedPose2D(points: points, frameSize: CGSize(width: input.frameSize[0], height: input.frameSize[1]))
+        let world = input.world.map { values in TrackedPose3D(points: Dictionary(uniqueKeysWithValues: values.compactMap { key, value -> (PoseJoint, SIMD3<Float>)? in
+            guard let joint = PoseJoint(rawValue: key), value.count == 3, value.allSatisfy(\.isFinite) else { return nil }
+            return (joint, SIMD3<Float>(value[0], value[1], value[2]))
+        })) }
+        let face = input.face.flatMap { values -> FacePose? in
+            guard values.count == 3, values.allSatisfy(\.isFinite) else { return nil }
+            return FacePose(pitchDegrees: values[0], yawDegrees: values[1], rollDegrees: values[2])
+        }
+        let viewpoint = PostureViewpointClassifier.classify(pose: pose, face: face)
+        let metrics = PostureMetricCalculator.metrics(pose2D: pose, pose3D: world, face: face, viewpoint: viewpoint)
+        if input.command == "calibrate" || input.command == "lean" {
+            calibration.reset(); calibrationStarted = input.timestamp
+            phase = input.command == "lean" ? "calibratingLean" : "calibratingStatic"
+            evaluation.reset(); smoothing.reset()
+        }
+        let canCalibrate = pose.hasNeck && pose.hasUpperBody && input.luma >= 0.12 && metrics.hasAnyMeasurement
+        var progress = 0.0
+        if let start = calibrationStarted {
+            if canCalibrate {
+                calibration.append(metrics: metrics, pose: pose)
+                progress = min(1, max(0, (input.timestamp - start) / 5))
+                if progress >= 1, let sample = calibration.makeBaseline(viewpoint: viewpoint) {
+                    if phase == "calibratingLean", var upright = baseline {
+                        guard PersonalizedLeanModel.hasLearnableSignal(upright: upright.metrics, leaned: sample.metrics, variability: upright.variability) else {
+                            throw NSError(domain: "PostureCore", code: 2)
+                        }
+                        upright.leanedMetrics = sample.metrics; baseline = upright; phase = "monitoring"
+                    } else { baseline = sample; phase = "awaitingLeanSample" }
+                    calibrationStarted = nil
+                }
+            } else { calibration.reset(); calibrationStarted = input.timestamp }
+        }
+        let walking = activity.update(pose: pose, at: input.timestamp)
+        var result = PostureEvaluation.good
+        if let reference = baseline, phase == "monitoring", canCalibrate {
+            let smooth = smoothing.append(metrics, at: input.timestamp, activity: walking)
+            result = evaluation.evaluate(metrics: smooth, baseline: reference,
+                sensitivity: PostureSensitivity(rawValue: input.sensitivity ?? "balanced") ?? .balanced, at: input.timestamp)
+        }
+        let output = Output(phase: phase, progress: progress, activity: walking.rawValue,
+            severity: canCalibrate ? result.severity.rawValue : 0, issue: result.primaryIssue?.rawValue,
+            viewpoint: viewpoint.rawValue, sound: alerts.shouldPlay(for: result.severity, at: input.timestamp),
+            hasNeck: pose.hasNeck, hasUpperBody: pose.hasUpperBody, hasFullBody: pose.hasFullBody, enoughLight: input.luma >= 0.12)
+        print(String(decoding: try encoder.encode(output), as: UTF8.self))
+        fflush(stdout)
+    } catch {
+        // No sensitive field data in diagnostics. The caller displays the
+        // actionable error and stops monitoring until the user restarts it.
+        print("{\"error\":\"Analyse ou calibration impossible. Placez-vous dans le cadre et recommencez la calibration.\"}")
+        fflush(stdout)
+    }
+}

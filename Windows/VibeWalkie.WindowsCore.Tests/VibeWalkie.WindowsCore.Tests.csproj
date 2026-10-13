@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageReference Include="xunit.v3" Version="3.1.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.0" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+    <PackageReference Include="QRCoder" Version="1.7.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../VibeWalkie.Protocol/VibeWalkie.Protocol.csproj" />
+    <Compile Include="../VibeWalkie.Companion/Security/ApprovedPeer.cs" Link="Security/ApprovedPeer.cs" />
+    <Compile Include="../VibeWalkie.Companion/Security/PairingAuthority.cs" Link="Security/PairingAuthority.cs" />
+    <Compile Include="../VibeWalkie.Companion/Network/UnauthenticatedSessionGate.cs" Link="Network/UnauthenticatedSessionGate.cs" />
+    <Compile Include="../VibeWalkie.Companion/Input/TextSelectionSnapshot.cs" Link="Input/TextSelectionSnapshot.cs" />
+    <Compile Include="../VibeWalkie.Companion/Health/WorkWalkingSessionStore.cs" Link="Health/WorkWalkingSessionStore.cs" />
+    <Compile Include="../VibeWalkie.Companion/Input/InputControlPolicy.cs" Link="Input/InputControlPolicy.cs" />
+  </ItemGroup>
+</Project>

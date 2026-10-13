@@ -1,0 +1,19 @@
+{
+  "reference": "Mac 1.0.76 (20261002154615), App Remote source inspected 2026-10-13",
+  "sourceSha256": {
+    "Packages/RemoteCore/Sources/RemoteCore/Protocol/RemoteEnvelope.swift": "9994f9fcee2bfc00e3e16decc0e1077427e027cb9d82372a14c0890a50841c2c",
+    "Packages/RemoteCore/Sources/RemoteCore/Models/Payloads.swift": "f0673cd36092d628dccba65d31f164a084ef4983f0ffb6171a0a9b33899fca55",
+    "Packages/RemoteCore/Sources/RemoteCore/Models/DeviceInfo.swift": "e329a72bba638aaedcc87eaf38df9bb0e243908927a240af42e16aabd5ce5f23",
+    "Packages/RemoteCore/Sources/RemoteCore/Models/ControlConfiguration.swift": "839c0e564f02179c1af0b124882c9b85225cdfd1b78116eb26a761c27b77daef",
+    "macOS/AppRemoteMac/Posture/PostureTypes.swift": "dbb90d44c69444b175052acd892b42dd312864c323ed5bf783339c8f2cb7da60",
+    "macOS/AppRemoteMac/Posture/PostureAnalysisEngine.swift": "7a523d6342c54b26b3b0416e585f5f1951516e92ff8431e2986b6d844d311541"
+  },
+  "repositorySha256": {
+    "Packages/RemoteCore/Sources/RemoteCore/Protocol/RemoteEnvelope.swift": "5775fc458680fe438ea2875f405213bc9c80db0bdbb28348ad2e0adee4a1e68c",
+    "Packages/RemoteCore/Sources/RemoteCore/Models/Payloads.swift": "8630ee7e22fc26a96944ee7a6970095e60c3678475e8f83984454aebff1bb5c9",
+    "Packages/RemoteCore/Sources/RemoteCore/Models/DeviceInfo.swift": "30f61f3d959b868f227dc5cbe610b73b1d7446ce4f841a4007086259ea3f7947",
+    "Packages/RemoteCore/Sources/RemoteCore/Models/ControlConfiguration.swift": "231a2653a9335bbd65f962de63a2cd99af4059ecf055fb706d6d761fd5c64fc4",
+    "macOS/AppRemoteMac/Posture/PostureTypes.swift": "dbb90d44c69444b175052acd892b42dd312864c323ed5bf783339c8f2cb7da60",
+    "macOS/AppRemoteMac/Posture/PostureAnalysisEngine.swift": "da1d13a16f81c1307abab9c7d4c8b7c6434462191fb67b2ef3952bbdc6706ac5"
+  }
+}

@@ -54,3 +54,13 @@ build-*/
 
 # Generated smoke-test reports
 *smoke-test*.json
+
+# Windows native validation outputs
+**/bin/
+**/obj/
+/Windows/Vision/models/
+/Windows/Vision/*.spec
+*.msix
+
+__pycache__/
+*.pyc
