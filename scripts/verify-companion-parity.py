@@ -13,7 +13,7 @@ parser.add_argument('--release', action='store_true')
 args = parser.parse_args()
 reference = json.loads((root / 'Documentation/Validation/windows-parity/mac-reference.json').read_text())
 errors = []
-current_mac_paths = sorted(str(path.relative_to(root)) for path in (root / "macOS/AppRemoteMac").rglob("*.swift"))
+current_mac_paths = sorted(path.relative_to(root).as_posix() for path in (root / "macOS/AppRemoteMac").rglob("*.swift"))
 if current_mac_paths != reference["repositoryMacPaths"]:
     errors.append("Mac companion files were added or removed: update the Windows parity audit and tests.")
 for filename, expected in reference['repositorySha256'].items():

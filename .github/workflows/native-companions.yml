@@ -42,6 +42,7 @@ jobs:
       - run: swift test --package-path Shared/PostureCore -c release
       - run: ./Windows/scripts/build-validation.ps1
       - run: ./Windows/scripts/test-native-window.ps1
+        shell: powershell
       - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
       - uses: actions/upload-artifact@v4
         if: always()
