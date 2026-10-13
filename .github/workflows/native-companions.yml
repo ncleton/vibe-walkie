@@ -45,6 +45,7 @@ jobs:
       - run: ./Windows/scripts/build-validation.ps1
       - run: ./Windows/scripts/test-native-window.ps1
         shell: powershell
+      - run: ./Windows/scripts/test-package.ps1
       - name: Remove the disposable standard test account
         if: always() && env.VIBEWALKIE_TEST_USERNAME != ''
         run: Remove-LocalUser -Name $env:VIBEWALKIE_TEST_USERNAME
@@ -52,5 +53,7 @@ jobs:
         if: always() && hashFiles('build/windows-native-validation/**') != ''
         with:
           name: windows-native-validation
-          path: build/windows-native-validation/
+          path: |
+            build/windows-native-validation/
+            build/windows-msix-validation/
           if-no-files-found: error

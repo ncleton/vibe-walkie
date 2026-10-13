@@ -5,7 +5,6 @@ Set-StrictMode -Version Latest
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Use the same three-part release version as Mac.' }
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $Output = Join-Path $Root 'build/windows-release'
-$Stage = Join-Path $Root 'build/windows-native-validation'
 $Sdk = Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/bin' -Directory |
     Where-Object { Test-Path (Join-Path $_.FullName 'x64/makeappx.exe') } | Sort-Object Name -Descending | Select-Object -First 1
 if ($null -eq $Sdk) { throw 'Install the Windows SDK containing MakeAppx and SignTool.' }
@@ -25,13 +24,7 @@ try {
         throw 'The Windows certificate is expired or is not a code-signing certificate.'
     }
     New-Item -ItemType Directory -Force $Output | Out-Null
-    [xml]$Manifest = Get-Content -Raw (Join-Path $Root 'Windows/VibeWalkie.Companion/Package.appxmanifest')
-    $Manifest.Package.Identity.Version = "$Version.0"
-    $Manifest.Package.Identity.Publisher = $Certificate.Subject
-    $Manifest.Package.Applications.Application.Executable = 'VibeWalkie.Companion.exe'
-    $Manifest.Package.Applications.Application.EntryPoint = 'Windows.FullTrustApplication'
-    $Manifest.Package.Applications.Application.Extensions.Extension.Executable = 'VibeWalkie.Companion.exe'
-    $Manifest.Save((Join-Path $Stage 'AppxManifest.xml'))
+    $Stage = & (Join-Path $PSScriptRoot 'prepare-package.ps1') -Version $Version -Publisher $Certificate.Subject
     $Msix = Join-Path $Output "VibeWalkie-Windows-$Version.msix"
     & (Join-Path $Sdk.FullName 'x64/makeappx.exe') pack /d $Stage /p $Msix /o
     if ($LASTEXITCODE -ne 0) { throw 'MSIX packaging failed; inspect the manifest and packaged assets.' }
