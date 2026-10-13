@@ -155,7 +155,10 @@ public sealed class WindowsWireTests
         public async ValueTask DisposeAsync()
         {
             await Server.DisposeAsync(); Certificate.Dispose();
-            if (_configurationBackup is null) File.Delete(_configurationPath);
+            if (_configurationBackup is null)
+            {
+                if (File.Exists(_configurationPath)) File.Delete(_configurationPath);
+            }
             else File.WriteAllBytes(_configurationPath, _configurationBackup);
             Directory.Delete(_directory, true);
         }
