@@ -83,8 +83,8 @@ public sealed class TargetCaptureService
             try
             {
                 var elevation = new Native.TokenElevation();
-                return Native.GetTokenInformation(token, 20, ref elevation, Marshal.SizeOf<Native.TokenElevation>(), out _)
-                    && elevation.TokenIsElevated != 0;
+                return !Native.GetTokenInformation(token, 20, ref elevation, Marshal.SizeOf<Native.TokenElevation>(), out _)
+                    || elevation.TokenIsElevated != 0;
             }
             finally { Native.CloseHandle(token); }
         }

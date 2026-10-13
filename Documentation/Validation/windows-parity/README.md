@@ -1,0 +1,55 @@
+# Validation de la mise à niveau Windows
+
+État au 14 octobre 2026 : intégration native en cours dans la
+[PR 10](https://github.com/ncleton/vibe-walkie/pull/10), version cible 1.0.76.
+Il ne s’agit pas encore d’une version Windows publiée ou d’une parité complète
+validée. Le tableau fonctionnel et les écarts se trouvent dans
+[`COMPANION_PARITY.md`](../../COMPANION_PARITY.md).
+
+## Référence et maintenance
+
+Le manifeste `mac-reference.json` conserve les empreintes de la source Mac
+actuelle consultée et celles du dépôt. `source-windows-sha256.json` conserve
+l’état initial du compagnon Windows natif importé, sans ses fichiers de build.
+Les sources de publication et les modifications préexistantes ont été préservées.
+
+Les consignes `AGENTS.md` imposent désormais un changement conjoint Mac/Windows.
+Une consigne ciblée dans `/Volumes/Docker/AGENTS.md` couvre également App Remote.
+Le contrôle de parité surveille les fichiers Mac du dépôt, les routes V4 et
+l’identité du moteur de posture Swift partagé. Sur la machine de publication,
+`--mac-source "/Volumes/Docker/App Remote"` vérifie aussi la source Mac actuelle.
+La CI native s’exécute sur tous les changements, y compris ceux du Mac seul.
+
+## Vérifications réalisées
+
+Sur le Mac mini de Nicolas : 14 tests de protocole, 11 tests du cœur Windows,
+36 tests du moteur de posture partagé réussis. Les assemblages du cœur Windows
+et des essais natifs ciblant Windows compilent sans erreur ni avertissement.
+
+La CI Windows a compilé et publié le véritable exécutable WinUI autonome avec
+ses runtimes .NET/Windows App SDK, le worker caméra MediaPipe, ses modèles
+vérifiés par SHA-256 et le moteur Swift. Le lancement de la fenêtre et la
+présence des contrôles français ont été vérifiés par UI Automation ; la capture
+DXGI a fourni un vrai JPEG. Les contrôles du démarrage complet du serveur,
+de la saisie WinForms et des exécutables embarqués sont encore en cours.
+
+Les tests utilisent un vrai champ WinForms sur le bureau interactif. Le runner
+CI étant élevé, le processus cible est lancé avec le jeton de l’Explorateur,
+selon l’API Windows [CreateProcessWithTokenW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw).
+Le compagnon conserve son refus de piloter les applications élevées.
+
+## Blocages de livraison
+
+- Aucun accès à une machine Windows 11 avec webcam n’est actuellement fourni
+  pour les essais physiques de calibration, rendu, commandes, assistants et CRM.
+- Les parcours iPhone, LAN/Tailscale, révocation, verrouillage, UAC et RDP doivent
+  être testés sur cette machine ; la CI hébergée ne les remplace pas.
+- Aucun certificat Windows de signature de confiance ni Publisher n’est
+  configuré dans l’environnement GitHub `release`. Le paquet MSIX signé, son
+  installation et sa vraie mise à jour doivent être vérifiés ensuite.
+
+`verify-companion-parity.py --release` échoue explicitement tant que ces preuves
+sont absentes. Aucun certificat artificiel et aucune preuve supposée ne sont
+créés. Les bundles CI non signés portent `purpose: validation` ; ils ne sont
+pas une distribution Windows publique. Le workflow de livraison signé est
+préparé, mais n’a pas encore été exécuté avec un certificat réel.

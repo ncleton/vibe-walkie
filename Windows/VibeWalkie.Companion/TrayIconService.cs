@@ -31,6 +31,7 @@ public sealed class TrayIconService : IDisposable
             Tip = "Vibe Walkie — compagnon Windows",
         };
         LocalDiagnostics.StartupStage("tray_icon_loaded");
+        if (_icon.Icon == 0) throw new InvalidOperationException("L’icône du compagnon est absente ou endommagée. Réinstallez le paquet Windows complet.");
         if (!Native.ShellNotifyIcon(0, ref _icon)) throw new InvalidOperationException("La zone de notification Windows est indisponible. Vérifiez que l’Explorateur Windows est actif dans votre session, puis relancez Vibe Walkie.");
         LocalDiagnostics.StartupStage("tray_icon_registered");
     }
@@ -78,7 +79,12 @@ public sealed class TrayIconService : IDisposable
 
     public void Dispose()
     {
-        if (_icon.Size != 0) _ = Native.ShellNotifyIcon(2, ref _icon);
+        if (_icon.Size != 0)
+        {
+            _ = Native.ShellNotifyIcon(2, ref _icon);
+            if (_icon.Icon != 0) _ = Native.DestroyIcon(_icon.Icon);
+            _icon.Icon = 0;
+        }
         _icon.Size = 0;
         _ = Native.RemoveWindowSubclass(_window, _procedure, 1);
     }
@@ -99,8 +105,8 @@ public sealed class TrayIconService : IDisposable
         }
         [StructLayout(LayoutKind.Sequential)] public struct Point { public int X; public int Y; }
         public delegate nint SubclassProcedure(nint window, uint message, nint wParam, nint lParam, nint subclass, nint data);
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern bool ShellNotifyIcon(uint message, ref NotifyIconData data);
-        [DllImport("user32.dll")] public static extern nint LoadIcon(nint instance, nint name);
+        [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", ExactSpelling = true, CharSet = CharSet.Unicode)] public static extern bool ShellNotifyIcon(uint message, ref NotifyIconData data);
+        [DllImport("user32.dll")] public static extern bool DestroyIcon(nint icon);
         [DllImport("comctl32.dll")] public static extern bool SetWindowSubclass(nint window, SubclassProcedure procedure, nint id, nint data);
         [DllImport("comctl32.dll")] public static extern bool RemoveWindowSubclass(nint window, SubclassProcedure procedure, nint id);
         [DllImport("comctl32.dll")] public static extern nint DefSubclassProc(nint window, uint message, nint wParam, nint lParam);

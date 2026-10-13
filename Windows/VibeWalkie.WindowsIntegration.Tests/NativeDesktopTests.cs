@@ -35,18 +35,23 @@ public sealed class NativeDesktopTests
                 try
                 {
                     token = capture.Capture();
-                    if (token.ApplicationName.Contains("powershell", StringComparison.OrdinalIgnoreCase)) break;
+                    if (token.ApplicationIdentifier == editor.Id.ToString()) break;
+                    token = null;
                 }
                 catch (ProtocolException error) { lastCaptureError = $"{error.Code}: {error.Message}"; }
                 await Task.Delay(100, TestContext.Current.CancellationToken);
             }
             Assert.True(token is not null, $"The real editor was not captured. Last error: {lastCaptureError}; exited: {editor.HasExited}");
             Assert.Contains("powershell", token.ApplicationName, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(editor.Id.ToString(), token.ApplicationIdentifier);
             var target = capture.Resolve(token.Token);
             Assert.True(input.InsertText("Bonjour été 🌍\nEncore café", target).Verified);
             Assert.Contains("Bonjour été 🌍", TargetCaptureService.ReadText(target.Element).Text);
             var next = capture.Capture(); var changed = capture.Resolve(next.Token);
             input.TypeManually("changement", true);
+            for (var attempt = 0; attempt < 40 && TargetCaptureService.ReadText(changed.Element).Text == changed.Snapshot.Text; attempt++)
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+            Assert.NotEqual(changed.Snapshot.Text, TargetCaptureService.ReadText(changed.Element).Text);
             Assert.Equal(RemoteErrorCode.TargetChanged, Assert.Throws<ProtocolException>(() => input.InsertText("ne pas insérer", changed)).Code);
             capture.Consume(); input.ReleaseInputs();
         }

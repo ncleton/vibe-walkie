@@ -33,6 +33,7 @@ try {
         }
     }
     if (-not (Test-Path (Join-Path $Core 'swiftCore.dll'))) { throw 'The self-contained posture runtime is incomplete: swiftCore.dll is missing.' }
+    & (Join-Path $PSScriptRoot 'test-bundled-components.ps1') -Bundle $Output
     $Files = Get-ChildItem $Output -Recurse -File | ForEach-Object {
         @{ path = $_.FullName.Substring($Output.Length + 1); sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     }

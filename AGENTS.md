@@ -33,6 +33,8 @@ Exécuter `python3 scripts/verify-companion-parity.py`, les tests Swift, les tes
 .NET et les tests natifs Windows affectés. La CI Windows doit se lancer aussi
 sur les changements Mac et du protocole partagé. Le contrôle de contrat ne
 remplace pas un essai réel de fonction.
+Sur la machine de publication, ajouter `--mac-source "/Volumes/Docker/App Remote"`
+au contrôle pour détecter aussi une évolution de la source Mac actuelle.
 
 Une correction validée doit être publiée sur tous les canaux concernés et les
 artefacts distants doivent être retéléchargés et vérifiés. Ne jamais générer un

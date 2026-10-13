@@ -11,9 +11,22 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--release', action='store_true')
 parser.add_argument('--preflight', action='store_true')
+parser.add_argument('--mac-source', type=Path, help='Current Mac publication source to compare with the port audit')
 args = parser.parse_args()
 reference = json.loads((root / 'Documentation/Validation/windows-parity/mac-reference.json').read_text())
 errors = []
+if args.mac_source:
+    for filename, expected in reference['sourceSha256'].items():
+        source = args.mac_source / filename
+        if not source.is_file() or hashlib.sha256(source.read_bytes().replace(b'\r\n', b'\n')).hexdigest() != expected:
+            errors.append(f'The current Mac source changed: {filename}. Port and validate Windows in the same change, then refresh the audit.')
+for name in ('PostureTypes.swift', 'PostureAnalysisEngine.swift'):
+    source = (root / 'Shared/PostureCore/Sources/PostureCore' / name).read_text().lstrip('\n')
+    for module in ('CoreGraphics', 'simd'):
+        source = source.replace(f'#if canImport({module})\nimport {module}\n#endif', f'import {module}')
+    expected = reference['sourceSha256'][f'macOS/AppRemoteMac/Posture/{name}']
+    if hashlib.sha256(source.encode()).hexdigest() != expected:
+        errors.append(f'The shared posture engine differs from the audited Mac source: {name}. Align both engines and rerun the camera and posture tests.')
 current_mac_paths = sorted(path.relative_to(root).as_posix() for path in (root / "macOS/AppRemoteMac").rglob("*.swift"))
 if current_mac_paths != reference["repositoryMacPaths"]:
     errors.append("Mac companion files were added or removed: update the Windows parity audit and tests.")
