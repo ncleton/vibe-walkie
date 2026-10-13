@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Interop.UIAutomationClient;
 using VibeWalkie.Companion.Input;
 using VibeWalkie.Companion.Screen;
 using VibeWalkie.Protocol;
@@ -29,11 +31,25 @@ public sealed class NativeDesktopTests
         try
         {
             var capture = new TargetCaptureService(); var input = new InputService(); TargetToken? token = null;
+            var automation = new CUIAutomation8();
+            var editorCondition = automation.CreateAndCondition(
+                automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ProcessIdPropertyId, editor.Id),
+                automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ControlTypePropertyId, UIA_ControlTypeIds.UIA_EditControlTypeId));
             string? lastCaptureError = null;
             for (var attempt = 0; attempt < 100; attempt++)
             {
                 try
                 {
+                    // Establish the real user precondition by clicking our own
+                    // editor, rather than assuming Windows grants auto-focus.
+                    var field = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Subtree, editorCondition);
+                    if (field is not null)
+                    {
+                        var bounds = field.CurrentBoundingRectangle;
+                        Assert.True(SetCursorPos((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2));
+                        input.Click(PointerButton.Left, 1);
+                        await Task.Delay(100, TestContext.Current.CancellationToken);
+                    }
                     token = capture.Capture();
                     if (token.ApplicationIdentifier == editor.Id.ToString()) break;
                     token = null;
@@ -55,7 +71,15 @@ public sealed class NativeDesktopTests
             Assert.Equal(RemoteErrorCode.TargetChanged, Assert.Throws<ProtocolException>(() => input.InsertText("ne pas insérer", changed)).Code);
             capture.Consume(); input.ReleaseInputs();
         }
-        finally { if (!editor.HasExited) editor.Kill(entireProcessTree: true); Directory.Delete(directory, true); }
+        finally
+        {
+            if (!editor.HasExited)
+            {
+                editor.Kill(entireProcessTree: true);
+                if (!editor.WaitForExit(5000)) throw new TimeoutException("The integration editor did not terminate during cleanup.");
+            }
+            Directory.Delete(directory, true);
+        }
     }
     [Fact]
     public async Task NativeDxgiCaptureProducesRealBoundedJpegAndReportsFailure()
@@ -69,4 +93,5 @@ public sealed class NativeDesktopTests
         Assert.True(result.JpegData.Length > 1000); Assert.Equal(0xFF, result.JpegData[0]);
         capture.Stop();
     }
+    [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
 }

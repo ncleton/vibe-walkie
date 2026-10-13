@@ -53,12 +53,14 @@ public sealed class CompanionRuntime : IAsyncDisposable
         await _server.StartAsync();
         try
         {
-            _publisher.Start($"VibeWalkie-{Environment.MachineName}", 54_389);
+            await _publisher.StartAsync($"VibeWalkie-{Environment.MachineName}", 54_389);
         }
         catch (Exception error)
         {
             LocalDiagnostics.Record("dns_sd_publish", error);
-            StatusChanged?.Invoke("Serveur prêt, mais publication réseau à réparer");
+            try { await DisposeAsync(); }
+            catch (Exception cleanup) { LocalDiagnostics.Record("dns_sd_startup_cleanup_failed", cleanup); }
+            throw;
         }
         ApprovedPeersChanged?.Invoke(_peers.Active);
         ShortcutsChanged?.Invoke(_server.Shortcuts);
@@ -113,7 +115,7 @@ public sealed class CompanionRuntime : IAsyncDisposable
         if (_disposed) return;
         _disposed = true;
         await Posture.DisposeAsync();
-        _publisher.Dispose();
-        await _server.DisposeAsync();
+        try { await _publisher.DisposeAsync(); }
+        finally { await _server.DisposeAsync(); }
     }
 }

@@ -14,9 +14,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - uses: SwiftyLab/setup-swift@v1.14.1
-        with:
-          swift-version: '6.4.0'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -33,11 +30,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Real Windows release evidence is missing or invalid.' }
       - run: dotnet test Windows/VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj -c Release
       - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
+      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.0'
       - run: swift test --package-path Shared/PostureCore -c release
       - run: ./Windows/scripts/build-validation.ps1 -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))"
       - run: ./Windows/scripts/test-native-window.ps1
         shell: powershell
-      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
       - name: Sign and verify trusted MSIX
         env:
           WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}

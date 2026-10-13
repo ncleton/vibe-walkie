@@ -48,9 +48,15 @@ try {
     foreach ($Required in @('Nouveau QR', 'Démarrer le coach', 'Appliquer les commandes', 'Rechercher une mise à jour', 'Quitter Vibe Walkie')) {
         if ($Names -notcontains $Required) { throw "The actual WinUI window is missing the expected control: $Required" }
     }
+    $WindowTitle = $Window.Current.Name
+    $Quit = $Buttons | Where-Object { $_.Current.Name -eq 'Quitter Vibe Walkie' } | Select-Object -First 1
+    $Invoke = [System.Windows.Automation.InvokePattern]$Quit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+    $Invoke.Invoke()
+    if (-not $Process.WaitForExit(30000)) { throw 'The actual companion did not exit after its native Quit button was invoked.' }
+    if ($Process.ExitCode -ne 0) { throw "The actual companion failed during shutdown (exit $($Process.ExitCode))." }
     # Only UI control names are exported. Never export the generated pairing QR,
     # confirmation secret, TLS identity, screenshots or the user's camera.
-    @{ nativeWindow = $true; title = $Window.Current.Name; requiredControls = $true; runtimeStarted = $true } |
+    @{ nativeWindow = $true; title = $WindowTitle; requiredControls = $true; runtimeStarted = $true; gracefulExit = $true } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'build/windows-native-validation/native-window-evidence.json') -Encoding utf8
 } finally {
     if (-not $Process.HasExited) { Stop-Process -Id $Process.Id -Force }
