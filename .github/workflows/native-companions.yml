@@ -36,6 +36,7 @@ jobs:
       - run: dotnet test Windows/VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj -c Release
       - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
       - run: dotnet build Windows/VibeWalkie.WindowsCore/VibeWalkie.WindowsCore.csproj -c Release
+      - run: ./Windows/scripts/create-ci-desktop-user.ps1
       - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
@@ -44,6 +45,9 @@ jobs:
       - run: ./Windows/scripts/build-validation.ps1
       - run: ./Windows/scripts/test-native-window.ps1
         shell: powershell
+      - name: Remove the disposable standard test account
+        if: always() && env.VIBEWALKIE_TEST_USERNAME != ''
+        run: Remove-LocalUser -Name $env:VIBEWALKIE_TEST_USERNAME
       - uses: actions/upload-artifact@v4
         if: always() && hashFiles('build/windows-native-validation/**') != ''
         with:

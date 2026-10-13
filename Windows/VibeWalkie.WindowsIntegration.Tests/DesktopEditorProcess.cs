@@ -2,16 +2,21 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Security.AccessControl;
+using System.Security.Principal;
 
 namespace VibeWalkie.WindowsIntegration.Tests;
 
 internal static class DesktopEditorProcess
 {
+    private static readonly Dictionary<int, List<DesktopAccess>> DesktopLeases = new();
     // Hosted CI runs elevated. Use the actual interactive Explorer user's
     // token so the editor has the same permissions as a normal desktop app.
     // The companion must continue to reject elevated target applications.
     public static Process Start(string script)
     {
+        var username = Environment.GetEnvironmentVariable("VIBEWALKIE_TEST_USERNAME");
+        if (username is not null) return StartStandardUser(script, username);
         var shell = Native.GetShellWindow();
         if (shell == 0) throw new InvalidOperationException("The integration test requires a real interactive Explorer desktop.");
         Native.GetWindowThreadProcessId(shell, out var shellId);
@@ -47,6 +52,77 @@ internal static class DesktopEditorProcess
         finally { Native.CloseHandle(process); }
     }
 
+    private static Process StartStandardUser(string script, string username)
+    {
+        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
+            throw new InvalidOperationException("The separate desktop test account is restricted to the disposable GitHub Actions machine.");
+        var password = Environment.GetEnvironmentVariable("VIBEWALKIE_TEST_PASSWORD")
+            ?? throw new InvalidOperationException("The CI standard-user credentials are not configured.");
+        var directory = Path.GetDirectoryName(script)!;
+        var access = new ProcessStartInfo("icacls.exe") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in new[] { directory, "/grant", $"{Environment.MachineName}\\{username}:(OI)(CI)RX" }) access.ArgumentList.Add(argument);
+        using (var acl = Process.Start(access) ?? throw new InvalidOperationException("Cannot grant read access to the integration editor."))
+        {
+            if (!acl.WaitForExit(5000) || acl.ExitCode != 0) throw new InvalidOperationException("The real standard user cannot read the integration editor script.");
+        }
+        var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+        var command = new StringBuilder($"\"{executable}\" -NoProfile -STA -ExecutionPolicy Bypass -File \"{script}\"");
+        var startup = new Native.StartupInfo { Size = Marshal.SizeOf<Native.StartupInfo>(), Desktop = "winsta0\\default" };
+        var leases = new List<DesktopAccess>();
+        var transferred = false;
+        try
+        {
+            var sid = (SecurityIdentifier)new NTAccount(Environment.MachineName, username).Translate(typeof(SecurityIdentifier));
+            leases.Add(DesktopAccess.Grant(Native.GetProcessWindowStation(), sid, 0x000F037F));
+            leases.Add(DesktopAccess.Grant(Native.GetThreadDesktop(Native.GetCurrentThreadId()), sid, 0x000F01FF));
+            if (!Native.CreateProcessWithLogonW(username, Environment.MachineName, password, 1, executable, command, 0x10, 0,
+                    directory, ref startup, out var child)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            try
+            {
+                var editor = Process.GetProcessById(child.ProcessId);
+                DesktopLeases.Add(editor.Id, leases);
+                transferred = true;
+                return editor;
+            }
+            finally { Native.CloseHandle(child.Thread); Native.CloseHandle(child.Process); }
+        }
+        finally { if (!transferred) foreach (var lease in leases.AsEnumerable().Reverse()) lease.Restore(); }
+    }
+
+    public static void RestoreDesktopAccess(int processId)
+    {
+        if (!DesktopLeases.Remove(processId, out var leases)) return;
+        foreach (var lease in leases.AsEnumerable().Reverse()) lease.Restore();
+    }
+
+    private sealed record DesktopAccess(nint Handle, byte[] Original)
+    {
+        public static DesktopAccess Grant(nint handle, SecurityIdentifier user, int access)
+        {
+            if (handle == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+            uint information = 4; // DACL_SECURITY_INFORMATION; owner/SACL stay intact.
+            Native.GetUserObjectSecurity(handle, ref information, null, 0, out var length);
+            if (length == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+            var original = new byte[length];
+            if (!Native.GetUserObjectSecurity(handle, ref information, original, length, out _))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            var descriptor = new RawSecurityDescriptor(original, 0);
+            if (descriptor.DiscretionaryAcl is not null)
+            {
+                descriptor.DiscretionaryAcl.InsertAce(descriptor.DiscretionaryAcl.Count,
+                    new CommonAce(AceFlags.None, AceQualifier.AccessAllowed, access, user, false, null));
+                var updated = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(updated, 0);
+                if (!Native.SetUserObjectSecurity(handle, ref information, updated)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            return new DesktopAccess(handle, original);
+        }
+        public void Restore()
+        {
+            uint information = 4;
+            if (!Native.SetUserObjectSecurity(Handle, ref information, Original)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+    }
+
     private static class Native
     {
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -65,6 +141,11 @@ internal static class DesktopEditorProcess
             public int ProcessId, ThreadId;
         }
         [DllImport("user32.dll")] public static extern nint GetShellWindow();
+        [DllImport("user32.dll", SetLastError = true)] public static extern nint GetProcessWindowStation();
+        [DllImport("user32.dll", SetLastError = true)] public static extern nint GetThreadDesktop(uint threadId);
+        [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+        [DllImport("user32.dll", SetLastError = true)] public static extern bool GetUserObjectSecurity(nint handle, ref uint information, [Out] byte[]? descriptor, uint length, out uint required);
+        [DllImport("user32.dll", SetLastError = true)] public static extern bool SetUserObjectSecurity(nint handle, ref uint information, byte[] descriptor);
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint window, out uint processId);
         [DllImport("kernel32.dll", SetLastError = true)] public static extern nint OpenProcess(uint access, bool inherit, uint processId);
         [DllImport("advapi32.dll", SetLastError = true)] public static extern bool OpenProcessToken(nint process, uint access, out nint token);
@@ -72,6 +153,10 @@ internal static class DesktopEditorProcess
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         public static extern bool CreateProcessWithTokenW(nint token, uint logonFlags, string application,
             StringBuilder commandLine, uint flags, nint environment, string? currentDirectory,
+            ref StartupInfo startup, out ProcessInformation process);
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern bool CreateProcessWithLogonW(string user, string domain, string password, uint logonFlags,
+            string application, StringBuilder commandLine, uint flags, nint environment, string? currentDirectory,
             ref StartupInfo startup, out ProcessInformation process);
         [DllImport("kernel32.dll")] public static extern bool CloseHandle(nint handle);
     }

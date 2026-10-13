@@ -30,6 +30,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Real Windows release evidence is missing or invalid.' }
       - run: dotnet test Windows/VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj -c Release
       - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
+      - run: ./Windows/scripts/create-ci-desktop-user.ps1
       - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
@@ -77,6 +78,9 @@ jobs:
           Invoke-WebRequest "https://github.com/$($env:GITHUB_REPOSITORY)/releases/download/windows-current/VibeWalkie-Windows.appinstaller" -OutFile $Feed
           [xml]$Document = Get-Content -Raw $Feed
           if ($Document.AppInstaller.MainPackage.Version -ne "$Version.0") { throw 'The public Windows update feed serves a different version.' }
+      - name: Remove the disposable standard test account
+        if: always() && env.VIBEWALKIE_TEST_USERNAME != ''
+        run: Remove-LocalUser -Name $env:VIBEWALKIE_TEST_USERNAME
       - name: Retain exact signed-artifact evidence
         uses: actions/upload-artifact@v4
         with:

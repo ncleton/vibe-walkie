@@ -78,6 +78,7 @@ public sealed class NativeDesktopTests
                 editor.Kill(entireProcessTree: true);
                 if (!editor.WaitForExit(5000)) throw new TimeoutException("The integration editor did not terminate during cleanup.");
             }
+            DesktopEditorProcess.RestoreDesktopAccess(editor.Id);
             Directory.Delete(directory, true);
         }
     }

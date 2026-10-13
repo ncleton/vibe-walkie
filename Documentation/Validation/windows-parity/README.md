@@ -32,13 +32,19 @@ La CI Windows a compilé et publié le véritable exécutable WinUI autonome ave
 ses runtimes .NET/Windows App SDK, le worker caméra MediaPipe, ses modèles
 vérifiés par SHA-256 et le moteur Swift. Le lancement de la fenêtre et la
 présence des contrôles français ont été vérifiés par UI Automation ; la capture
-DXGI a fourni un vrai JPEG. Les contrôles du démarrage complet du serveur,
-de la saisie WinForms et des exécutables embarqués sont encore en cours.
+DXGI a fourni un vrai JPEG. Le démarrage complet du serveur et les exécutables
+caméra/Swift embarqués ont été exécutés avec succès, même sans leurs outils de
+développement sur PATH. Les essais de saisie WinForms sous utilisateur standard,
+de confirmation DNS-SD et de fermeture propre sont encore en cours.
 
 Les tests utilisent un vrai champ WinForms sur le bureau interactif. Le runner
-CI étant élevé, le processus cible est lancé avec le jeton de l’Explorateur,
-selon l’API Windows [CreateProcessWithTokenW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw).
-Le compagnon conserve son refus de piloter les applications élevées.
+CI et son Explorateur étant élevés, la CI crée un véritable compte standard
+temporaire et lance le champ cible par l’API Windows
+[CreateProcessWithLogonW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithlogonw).
+L’accès au bureau est limité à ce compte puis les ACL sont restaurées ; le compte
+est supprimé en fin de job. Le compagnon conserve son refus de piloter les
+applications élevées. Cela reste un essai de CI : les permissions du compagnon
+et des applications dans une vraie session utilisateur Windows 11 sont à valider.
 
 ## Blocages de livraison
 
