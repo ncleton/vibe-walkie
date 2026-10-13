@@ -28,14 +28,15 @@ Sur le Mac mini de Nicolas : 14 tests de protocole, 11 tests du cœur Windows,
 36 tests du moteur de posture partagé réussis. Les assemblages du cœur Windows
 et des essais natifs ciblant Windows compilent sans erreur ni avertissement.
 
-La CI Windows a compilé et publié le véritable exécutable WinUI autonome avec
+La CI Windows a compilé le véritable exécutable WinUI autonome et conservé un
+artefact de validation avec
 ses runtimes .NET/Windows App SDK, le worker caméra MediaPipe, ses modèles
 vérifiés par SHA-256 et le moteur Swift. Le lancement de la fenêtre et la
 présence des contrôles français ont été vérifiés par UI Automation ; la capture
 DXGI a fourni un vrai JPEG. Le démarrage complet du serveur et les exécutables
 caméra/Swift embarqués ont été exécutés avec succès, même sans leurs outils de
 développement sur PATH. Les essais de saisie WinForms sous utilisateur standard,
-de confirmation DNS-SD et de fermeture propre sont encore en cours.
+de confirmation DNS-SD et de fermeture propre sont réussis.
 
 Les tests utilisent un vrai champ WinForms sur le bureau interactif. Le runner
 CI et son Explorateur étant élevés, la CI crée un véritable compte standard
@@ -45,6 +46,28 @@ L’accès au bureau est limité à ce compte puis les ACL sont restaurées ; le
 est supprimé en fin de job. Le compagnon conserve son refus de piloter les
 applications élevées. Cela reste un essai de CI : les permissions du compagnon
 et des applications dans une vraie session utilisateur Windows 11 sont à valider.
+
+## Preuve CI de la révision native
+
+[Exécution réussie 38482816132](https://github.com/ncleton/vibe-walkie/actions/runs/38482816132),
+commit `752c105ded9156d205b244cd0a8501257a7df08d` :
+
+- Mac : 14 tests de protocole, 11 tests du cœur et 36 tests de posture réussis.
+- Windows : les mêmes 61 tests et 2 essais natifs réels réussis, aucun ignoré.
+  La saisie vérifie accents, caractère hors BMP, retour à la ligne et refus d’un
+  champ modifié. DXGI fournit un vrai JPEG borné.
+- La véritable fenêtre WinUI démarre avec ses contrôles français, son serveur
+  et la publication DNS-SD confirmée. Le bouton Quitter arrête le processus avec
+  un code de sortie nul, après le retrait de l’annonce réseau.
+- Le worker caméra et le moteur Swift embarqués démarrent sans les outils de
+  développement sur PATH. Une liste de caméras vide dans la CI ne valide pas une
+  acquisition vidéo, une calibration ou les angles 3D.
+
+[Artefact non signé de validation](https://github.com/ncleton/vibe-walkie/actions/runs/38482816132/artifacts/11858237950),
+archive ZIP SHA-256 :
+`a9609c2cdd6dcb9ba064853133a603c38dfba51eb956537950a8b75cfabaa059`.
+Il n’est pas annoncé comme un installateur de production. Les modifications
+ultérieures de ce rapport n’altèrent pas cette révision du code vérifié.
 
 ## Blocages de livraison
 
