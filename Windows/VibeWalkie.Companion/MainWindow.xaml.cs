@@ -44,6 +44,8 @@ public sealed partial class MainWindow : Window
     public void Bind(CompanionRuntime runtime)
     {
         _runtime = runtime;
+        SensitivityChoice.SelectedIndex = runtime.Posture.Sensitivity switch { "relaxed" => 0, "strict" => 2, _ => 1 };
+        SoundSwitch.IsOn = runtime.Posture.Preferences.SoundEnabled;
         runtime.StatusChanged += status => DispatcherQueue.TryEnqueue(() =>
         {
             StatusBar.Title = status;
@@ -74,7 +76,7 @@ public sealed partial class MainWindow : Window
                 + (presentation.Issue is null ? "" : " — " + IssueLabel(presentation.Issue));
             if (!presentation.EnoughLight) PostureStatus.Text += " — Augmentez l’éclairage";
             if (!presentation.HasNeck) PostureStatus.Text += " — Gardez la tête et les épaules dans le cadre";
-            if (presentation.Sound) MessageBeep(0x30);
+            if (presentation.Sound && runtime.Posture.Preferences.SoundEnabled) MessageBeep(0x30);
         });
         runtime.Posture.Failed += detail => DispatcherQueue.TryEnqueue(() => { PostureStatus.Text = detail; CameraPreview.Source = null; ShowFailure(detail); });
     }
@@ -183,13 +185,19 @@ public sealed partial class MainWindow : Window
     public void ShowFailure(string detail) { StatusBar.Title = detail; StatusBar.Severity = InfoBarSeverity.Error; StatusBar.IsOpen = true; }
     private async void RefreshCameras_Click(object sender, RoutedEventArgs e)
     {
-        try { CameraChoice.ItemsSource = await PostureCoachService.CamerasAsync(); CameraChoice.SelectedIndex = 0; }
+        try
+        {
+            var cameras = await PostureCoachService.CamerasAsync(); CameraChoice.ItemsSource = cameras;
+            var previous = _runtime?.Posture.Preferences.CameraName;
+            CameraChoice.SelectedIndex = previous is null ? (cameras.Count > 0 ? 0 : -1) : cameras.ToList().IndexOf(previous);
+            if (CameraChoice.SelectedIndex < 0) ShowFailure("Choisissez une caméra disponible. La caméra enregistrée est absente ou inaccessible.");
+        }
         catch (Exception error) { ShowFailure(error.Message); }
     }
     private void StartPosture_Click(object sender, RoutedEventArgs e)
     {
         if (CameraChoice.SelectedIndex < 0) { ShowFailure("Actualisez les caméras puis choisissez celle à utiliser."); return; }
-        _runtime?.Posture.Start(CameraChoice.SelectedIndex);
+        if (_runtime is not null) { _runtime.Posture.SetPreferences(_runtime.Posture.Preferences with { CameraName = (string)CameraChoice.SelectedItem }); _runtime.Posture.Start(CameraChoice.SelectedIndex); }
     }
     private async void StopPosture_Click(object sender, RoutedEventArgs e)
     {
@@ -199,7 +207,11 @@ public sealed partial class MainWindow : Window
     private void CalibrateLean_Click(object sender, RoutedEventArgs e) => _runtime?.Posture.Calibrate(true);
     private void Sensitivity_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (_runtime is not null && SensitivityChoice.SelectedItem is ComboBoxItem { Tag: string sensitivity }) _runtime.Posture.Sensitivity = sensitivity;
+        if (_runtime is not null && SensitivityChoice.SelectedItem is ComboBoxItem { Tag: string sensitivity }) _runtime.Posture.SetPreferences(_runtime.Posture.Preferences with { Sensitivity = sensitivity });
+    }
+    private void Sound_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_runtime is not null) _runtime.Posture.SetPreferences(_runtime.Posture.Preferences with { SoundEnabled = SoundSwitch.IsOn });
     }
     private void RefreshHealth_Click(object sender, RoutedEventArgs e)
     {
@@ -235,7 +247,7 @@ public sealed partial class MainWindow : Window
     }
     private async void Quit_Click(object sender, RoutedEventArgs e) => await QuitAsync();
     private async Task QuitAsync() { if (_runtime is not null) await _runtime.DisposeAsync(); _tray.Dispose(); Application.Current.Exit(); }
-    private static string PhaseLabel(string phase) => phase switch { "positioning" => "Ajustez le cadrage", "calibratingStatic" => "Calibration de la bonne posture", "awaitingLeanSample" => "Enregistrez votre posture penchée", "calibratingLean" => "Apprentissage de la posture penchée", "monitoring" => "Surveillance active", _ => phase };
+    private static string PhaseLabel(string phase) => phase switch { "positioning" => "Ajustez le cadrage", "calibratingStatic" => "Calibration de la bonne posture", "awaitingLeanSample" => "Enregistrez votre posture penchée", "calibratingLean" => "Apprentissage de la posture penchée", "calibratingWalking" => "Calibration de la marche", "monitoring" => "Surveillance active", _ => phase };
     private static string IssueLabel(string issue) => issue switch { "neckForward" => "Cou vers l’avant", "headDown" => "Tête baissée", "headTurned" => "Tête tournée", "trunkInclined" => "Buste incliné", _ => issue };
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool MessageBeep(uint type);
 

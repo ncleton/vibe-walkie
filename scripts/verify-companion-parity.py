@@ -14,7 +14,7 @@ args = parser.parse_args()
 reference = json.loads((root / 'Documentation/Validation/windows-parity/mac-reference.json').read_text())
 errors = []
 for filename, expected in reference['repositorySha256'].items():
-    actual = hashlib.sha256((root / filename).read_bytes()).hexdigest()
+    actual = hashlib.sha256((root / filename).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
     if actual != expected:
         errors.append(f'{filename} changed: update Windows, shared contracts, tests and mac-reference.json in the same change.')
 protocol = (root / 'Windows/VibeWalkie.Protocol/Protocol.cs').read_text()

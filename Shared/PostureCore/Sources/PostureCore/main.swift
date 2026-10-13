@@ -28,9 +28,11 @@ struct Output: Encodable {
 var activity = PostureActivityDetector()
 var evaluation = PostureEvaluationEngine()
 var calibration = PostureCalibrationAccumulator()
+var continuity = PostureCalibrationContinuityGate()
 var smoothing = PostureMetricSmoother()
 var alerts = PostureCorrectionSoundGate()
 var baseline: PostureBaseline?
+var walkingBaseline: PostureBaseline?
 var phase = "positioning"
 var calibrationStarted: Double?
 let encoder = JSONEncoder()
@@ -38,6 +40,7 @@ encoder.outputFormatting = [.sortedKeys]
 while let line = readLine() {
     do {
         let input = try JSONDecoder().decode(Input.self, from: Data(line.utf8))
+        guard input.frameSize.count == 2, input.frameSize.allSatisfy({ $0.isFinite && $0 > 0 }), input.timestamp.isFinite, input.luma.isFinite else { throw NSError(domain: "PostureCore", code: 1) }
         let points = Dictionary(uniqueKeysWithValues: input.points.compactMap { key, value -> (PoseJoint, PosePoint)? in
             guard let joint = PoseJoint(rawValue: key), value.count == 3, value.allSatisfy(\.isFinite) else { return nil }
             return (joint, PosePoint(location: CGPoint(x: value[0], y: value[1]), confidence: Float(value[2])))
@@ -54,18 +57,28 @@ while let line = readLine() {
         let viewpoint = PostureViewpointClassifier.classify(pose: pose, face: face)
         let metrics = PostureMetricCalculator.metrics(pose2D: pose, pose3D: world, face: face, viewpoint: viewpoint)
         if input.command == "calibrate" || input.command == "lean" {
-            calibration.reset(); calibrationStarted = input.timestamp
+            calibration.reset(); continuity.reset(); calibrationStarted = input.timestamp
             phase = input.command == "lean" ? "calibratingLean" : "calibratingStatic"
             evaluation.reset(); smoothing.reset()
         }
-        let canCalibrate = pose.hasNeck && pose.hasUpperBody && input.luma >= 0.12 && metrics.hasAnyMeasurement
+        let walking = activity.update(pose: pose, at: input.timestamp)
+        let canCalibrate = (pose.hasNeck || world?.hasHeadAndThorax == true) && input.luma >= 0.12 && metrics.hasAnyMeasurement
+        if phase == "monitoring", walking == .walking, walkingBaseline == nil {
+            calibration.reset(); continuity.reset(); calibrationStarted = input.timestamp; phase = "calibratingWalking"
+        }
+        if phase == "calibratingWalking", walking != .walking {
+            calibration.reset(); calibrationStarted = nil; phase = "monitoring"
+        }
         var progress = 0.0
         if let start = calibrationStarted {
             if canCalibrate {
                 calibration.append(metrics: metrics, pose: pose)
-                progress = min(1, max(0, (input.timestamp - start) / 5))
+                _ = continuity.shouldRestart(isValid: true, at: input.timestamp)
+                let duration = phase == "calibratingWalking" ? 12.0 : phase == "calibratingLean" ? 5.0 : 8.0
+                progress = min(1, max(0, (input.timestamp - start) / duration))
                 if progress >= 1, let sample = calibration.makeBaseline(viewpoint: viewpoint) {
-                    if phase == "calibratingLean", var upright = baseline {
+                    if phase == "calibratingWalking" { walkingBaseline = sample; phase = "monitoring" }
+                    else if phase == "calibratingLean", var upright = baseline {
                         guard PersonalizedLeanModel.hasLearnableSignal(upright: upright.metrics, leaned: sample.metrics, variability: upright.variability) else {
                             throw NSError(domain: "PostureCore", code: 2)
                         }
@@ -73,11 +86,11 @@ while let line = readLine() {
                     } else { baseline = sample; phase = "awaitingLeanSample" }
                     calibrationStarted = nil
                 }
-            } else { calibration.reset(); calibrationStarted = input.timestamp }
+            } else if continuity.shouldRestart(isValid: false, at: input.timestamp) { calibration.reset(); calibrationStarted = input.timestamp; continuity.reset() }
         }
-        let walking = activity.update(pose: pose, at: input.timestamp)
         var result = PostureEvaluation.good
-        if let reference = baseline, phase == "monitoring", canCalibrate {
+        let reference = walking == .walking ? walkingBaseline : baseline
+        if let reference, phase == "monitoring", canCalibrate {
             let smooth = smoothing.append(metrics, at: input.timestamp, activity: walking)
             result = evaluation.evaluate(metrics: smooth, baseline: reference,
                 sensitivity: PostureSensitivity(rawValue: input.sensitivity ?? "balanced") ?? .balanced, at: input.timestamp)

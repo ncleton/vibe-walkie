@@ -33,9 +33,9 @@ publication. Ne pas annoncer un codec que le backend ne peut pas produire.
 ## Écarts restant ouverts
 
 La présence d’une route protocolaire et une compilation ne suffisent pas à
-annoncer l’identité de comportement. Les actions vocales Windows doivent encore
-couvrir les sous-actions Mac de téléversement, raccourcis dictés, coordonnées
-explicites et contrôle précis des onglets. L’interface doit être vérifiée pour
+annoncer l’identité de comportement. Les sous-actions de téléversement, raccourcis dictés et coordonnées explicites
+sont implémentées mais attendent les parcours réels Windows. Le contrôle précis
+des onglets doit être comparé avec la lecture native et le pont Chrome du Mac. L’interface doit être vérifiée pour
 l’ordre et les icônes des commandes, la bulle de posture et les préférences
 persistantes. Les assertions de résultat doivent porter sur les vrais contrôles
 Windows, sans simulation ni succès supposé.

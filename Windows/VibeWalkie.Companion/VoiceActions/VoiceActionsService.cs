@@ -23,8 +23,10 @@ public sealed class VoiceActionsService(InputService input)
     private static string KeyPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VibeWalkie", "voice-actions-key.dpapi");
     private sealed record Candidate(IUIAutomationElement Element, int[] Runtime, string Label, IReadOnlySet<string> Actions);
     private sealed record ApplicationCandidate(string Name, string Path);
+    private sealed record ShortcutCandidate(ushort Key, ushort[] Modifiers, string Description);
+    private sealed record CoordinateCandidate(int X, int Y);
     private sealed record Observation(nint Window, int ProcessID, Dictionary<string, Candidate> Elements, string Description);
-    private static readonly string[] ActionNames = ["complete", "open_app", "click_element", "double_click_element", "right_click_element", "hover_element", "drag_element", "focus_element", "type_text", "set_element_value", "open_resource", "upload_file", "press_key", "press_shortcut", "scroll", "increment_element", "decrement_element", "perform_accessibility_action", "window_layout", "browser"];
+    private static readonly string[] ActionNames = ["complete", "open_app", "click_element", "double_click_element", "right_click_element", "hover_element", "drag_element", "focus_element", "type_text", "set_element_value", "open_resource", "upload_file", "press_key", "press_shortcut", "scroll", "increment_element", "decrement_element", "perform_accessibility_action", "window_layout", "browser", "click_coordinate", "double_click_coordinate", "right_click_coordinate", "hover_coordinate", "drag_coordinate", "wait"];
 
     public async Task ValidateAndSaveKeyAsync(string key)
     {
@@ -77,6 +79,10 @@ public sealed class VoiceActionsService(InputService input)
             var textChoices = Regex.Matches(payload.Text, "[«\"“]([^»\"”]+)[»\"”]").Select((match, index) => (ID: "text_" + index, Text: match.Groups[1].Value)).ToDictionary(value => value.ID, value => value.Text);
             var resources = Regex.Matches(payload.Text, @"https://[^\s<>\""»]+|[A-Za-z]:\\[^\r\n\""»]+")
                 .Select((match, index) => (ID: "resource_" + index, Text: match.Value.TrimEnd('.', ','))).ToDictionary(value => value.ID, value => value.Text);
+            var coordinates = Regex.Matches(payload.Text, @"\bx\s*[=:]\s*(\d{1,5})\s*[,; ]+y\s*[=:]\s*(\d{1,5})", RegexOptions.IgnoreCase)
+                .Select((match, index) => (ID: "coordinate_" + index, Value: new CoordinateCandidate(int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value))))
+                .Where(item => item.Value.X < GetSystemMetrics(0) && item.Value.Y < GetSystemMetrics(1)).ToDictionary(item => item.ID, item => item.Value);
+            var shortcuts = ExtractShortcuts(payload.Text);
             var keys = Enum.GetValues<RemoteKey>().ToDictionary(value => CanonicalJson.Serialize(value).Trim('"'), value => value);
             var history = new List<string>(); var rejectedCompletion = 0;
             for (var step = 0; step < 32; step++)
@@ -91,6 +97,9 @@ public sealed class VoiceActionsService(InputService input)
                     application = Choice("Application à ouvrir", apps.ToDictionary(item => item.Key, item => item.Value.Name)),
                     target = Choice("Contrôle à utiliser", elements), destination = Choice("Destination du glisser", elements),
                     text = Choice("Texte explicitement dicté", textChoices), resource = Choice("Ressource explicitement dictée", resources),
+                    coordinate = Choice("Coordonnée explicitement dictée", coordinates.ToDictionary(item => item.Key, item => $"x={item.Value.X} y={item.Value.Y}")),
+                    destination_coordinate = Choice("Destination explicitement dictée", coordinates.ToDictionary(item => item.Key, item => $"x={item.Value.X} y={item.Value.Y}")),
+                    shortcut = Choice("Raccourci explicitement dicté", shortcuts.ToDictionary(item => item.Key, item => item.Value.Description)),
                     key = Choice("Touche nécessaire", keys.ToDictionary(item => item.Key, item => item.Key)),
                     scroll = Choice("Direction du défilement", new[] { "up", "down", "left", "right" }.ToDictionary(value => value, value => value)),
                     browser = Choice("Commande navigateur", new[] { "back", "forward", "reload", "new_tab", "close_tab", "reopen_tab", "next_tab", "previous_tab", "address_bar", "zoom_in", "zoom_out", "zoom_reset" }.ToDictionary(value => value, value => value)),
@@ -105,7 +114,7 @@ public sealed class VoiceActionsService(InputService input)
                     continue;
                 }
                 if (GetForegroundWindow() != observation.Window) throw new ProtocolException(RemoteErrorCode.TargetChanged);
-                var summary = ExecuteStep(action, decision, observation, apps, textChoices, resources, keys);
+                var summary = ExecuteStep(action, decision, observation, apps, textChoices, resources, keys, shortcuts, coordinates);
                 history.Add(summary); await Task.Delay(action is "open_app" or "open_resource" or "browser" ? 900 : 250);
             }
             throw new ProtocolException(RemoteErrorCode.InputUnavailable);
@@ -118,7 +127,7 @@ public sealed class VoiceActionsService(InputService input)
         return _completed[command] = new VoiceActionResult("complete", summary);
     }
     private string ExecuteStep(string action, JsonDocument decision, Observation observation,
-        Dictionary<string, ApplicationCandidate> apps, Dictionary<string, string> texts, Dictionary<string, string> resources, Dictionary<string, RemoteKey> keys)
+        Dictionary<string, ApplicationCandidate> apps, Dictionary<string, string> texts, Dictionary<string, string> resources, Dictionary<string, RemoteKey> keys, Dictionary<string, ShortcutCandidate> shortcuts, Dictionary<string, CoordinateCandidate> coordinates)
     {
         Candidate Target(string question = "target")
         {
@@ -134,6 +143,35 @@ public sealed class VoiceActionsService(InputService input)
         }
         switch (action)
         {
+            case "wait": Thread.Sleep(500); break;
+            case "press_shortcut":
+                var shortcut = shortcuts[Selected(decision, "shortcut", shortcuts.Keys)];
+                input.PressCombination(shortcut.Key, shortcut.Modifiers); break;
+            case "click_coordinate":
+            case "double_click_coordinate":
+            case "right_click_coordinate":
+            case "hover_coordinate":
+            case "drag_coordinate":
+                var coordinate = coordinates[Selected(decision, "coordinate", coordinates.Keys)];
+                if (!SetCursorPos(coordinate.X, coordinate.Y)) throw new ProtocolException(RemoteErrorCode.InputUnavailable);
+                if (action == "drag_coordinate")
+                {
+                    var destinationPoint = coordinates[Selected(decision, "destination_coordinate", coordinates.Keys)];
+                    input.Drag(DragPhase.Began, 0, 0);
+                    try { if (!SetCursorPos(destinationPoint.X, destinationPoint.Y)) throw new ProtocolException(RemoteErrorCode.InputUnavailable); }
+                    finally { input.ReleaseInputs(); }
+                }
+                else if (action != "hover_coordinate") input.Click(action == "right_click_coordinate" ? PointerButton.Right : PointerButton.Left, action == "double_click_coordinate" ? 2 : 1);
+                break;
+            case "upload_file":
+                var file = resources[Selected(decision, "resource", resources.Keys)];
+                if (!File.Exists(file)) throw new ProtocolException(RemoteErrorCode.ApplicationNotFound);
+                var chooser = Target();
+                if (chooser.Element.GetCurrentPattern(UIA_PatternIds.UIA_InvokePatternId) is not IUIAutomationInvokePattern openChooser) throw new ProtocolException(RemoteErrorCode.UnsupportedCapability);
+                openChooser.Invoke(); Thread.Sleep(500);
+                var dialogHandle = GetForegroundWindow(); var dialogClass = new StringBuilder(256); GetClassName(dialogHandle, dialogClass, dialogClass.Capacity);
+                if (dialogClass.ToString() != "#32770") throw new ProtocolException(RemoteErrorCode.NoFocusedTarget);
+                input.PressCombination((ushort)'L', [0x11]); input.TypeManually(file, true); input.Press(RemoteKey.Enter); Thread.Sleep(250); input.Press(RemoteKey.Enter); break;
             case "open_app": Process.Start(new ProcessStartInfo(apps[Selected(decision, "application", apps.Keys)].Path) { UseShellExecute = true }); break;
             case "open_resource":
                 var resource = resources[Selected(decision, "resource", resources.Keys)];
@@ -154,6 +192,10 @@ public sealed class VoiceActionsService(InputService input)
                 input.PressCombination((ushort)(layout switch { "left_half" => 0x25, "right_half" => 0x27, "maximize" => 0x26, _ => 0x28 }), [0x5B]); break;
             case "focus_element": Target().Element.SetFocus(); break;
             case "type_text":
+                var field = Target(); field.Element.SetFocus();
+                var targeting = new TargetCaptureService(); var token = targeting.Capture();
+                try { input.InsertText(texts[Selected(decision, "text", texts.Keys)], targeting.Resolve(token.Token)); }
+                finally { targeting.Consume(); } break;
             case "set_element_value":
                 var target = Target(); var text = texts[Selected(decision, "text", texts.Keys)];
                 if (target.Element.GetCurrentPattern(UIA_PatternIds.UIA_ValuePatternId) is not IUIAutomationValuePattern value || value.CurrentIsReadOnly != 0) throw new ProtocolException(RemoteErrorCode.AXNotSettable);
@@ -223,6 +265,26 @@ public sealed class VoiceActionsService(InputService input)
         }
         return apps;
     }
+    private static Dictionary<string, ShortcutCandidate> ExtractShortcuts(string text)
+    {
+        var result = new Dictionary<string, ShortcutCandidate>();
+        foreach (Match match in Regex.Matches(text, @"\b(?:Ctrl|Control|Alt|Shift|Maj|Win)(?:\s*\+\s*(?:Ctrl|Control|Alt|Shift|Maj|Win|F(?:1[0-2]|[1-9])|[A-Za-z0-9]))+\b", RegexOptions.IgnoreCase))
+        {
+            var parts = match.Value.Split('+', StringSplitOptions.TrimEntries); var modifiers = new List<ushort>(); ushort? key = null;
+            foreach (var part in parts)
+            {
+                var normalized = part.ToLowerInvariant();
+                if (normalized is "ctrl" or "control") modifiers.Add(0x11);
+                else if (normalized is "shift" or "maj") modifiers.Add(0x10);
+                else if (normalized == "alt") modifiers.Add(0x12);
+                else if (normalized == "win") modifiers.Add(0x5B);
+                else if (normalized.StartsWith('f') && int.TryParse(normalized[1..], out var function) && function is >= 1 and <= 12) key = (ushort)(0x6F + function);
+                else if (part.Length == 1 && char.IsAsciiLetterOrDigit(part[0])) key = char.ToUpperInvariant(part[0]);
+            }
+            if (key is not null) result["shortcut_" + result.Count] = new ShortcutCandidate(key.Value, modifiers.Distinct().ToArray(), match.Value);
+        }
+        return result;
+    }
     private static object Choice(string instructions, Dictionary<string, string> criteria)
     {
         var choices = new Dictionary<string, string>(criteria) { ["none"] = "Aucun choix observé et compatible" };
@@ -249,11 +311,15 @@ public sealed class VoiceActionsService(InputService input)
     {
         var answer = decision.RootElement.GetProperty("answers").GetProperty(question);
         var choice = answer.GetProperty("choice").GetString();
-        if (choice is null || !allowed.Contains(choice, StringComparer.Ordinal)
-            || answer.GetProperty("probabilities").GetProperty(choice).GetDouble() < .62
-            || answer.GetProperty("confidence").GetDouble() < .5) throw new ProtocolException(RemoteErrorCode.UnsupportedCapability);
+        if (choice is null || !allowed.Contains(choice, StringComparer.Ordinal)) throw new ProtocolException(RemoteErrorCode.UnsupportedCapability);
+        var probability = answer.GetProperty("probabilities").GetProperty(choice).GetDouble();
+        var confidence = answer.GetProperty("confidence").GetDouble();
+        if (!double.IsFinite(probability) || !double.IsFinite(confidence) || probability is < .62 or > 1 || confidence is < .5 or > 1)
+            throw new ProtocolException(RemoteErrorCode.UnsupportedCapability);
         return choice;
     }
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(nint window, StringBuilder name, int size);
 }

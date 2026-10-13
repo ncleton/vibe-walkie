@@ -22,6 +22,7 @@
             <ComboBox x:Name="SensitivityChoice" Header="Sensibilité" SelectedIndex="1" SelectionChanged="Sensitivity_Changed">
               <ComboBoxItem Content="Souple" Tag="relaxed" /><ComboBoxItem Content="Équilibrée" Tag="balanced" /><ComboBoxItem Content="Stricte" Tag="strict" />
             </ComboBox>
+            <ToggleSwitch x:Name="SoundSwitch" Header="Alertes sonores de posture" IsOn="True" Toggled="Sound_Toggled" />
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Démarrer le coach" Click="StartPosture_Click" />
               <Button Content="Arrêter le coach" Click="StopPosture_Click" />

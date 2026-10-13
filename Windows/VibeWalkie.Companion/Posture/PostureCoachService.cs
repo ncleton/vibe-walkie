@@ -14,7 +14,9 @@ public sealed class PostureCoachService(WorkWalkingSessionStore walking) : IAsyn
     private CancellationTokenSource? _lifetime;
     private Task? _monitor;
     private string? _command;
-    public string Sensitivity { get; set; } = "balanced";
+    public PosturePreferences Preferences { get; private set; } = PosturePreferences.Load();
+    public string Sensitivity => Preferences.Sensitivity;
+    public void SetPreferences(PosturePreferences preferences) { preferences.Save(); Preferences = preferences; }
     public bool IsRunning => _monitor is { IsCompleted: false };
     public event Action<PosturePresentation, byte[]>? Changed;
     public event Action<string>? Failed;

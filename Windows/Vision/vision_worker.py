@@ -85,7 +85,7 @@ def run():
                           "luma": float(cv2.cvtColor(pixels, cv2.COLOR_BGR2GRAY).mean() / 255),
                           "frameSize": [pixels.shape[1], pixels.shape[0]], "preview": base64.b64encode(preview).decode()}
                 print(json.dumps(result, separators=(",", ":"), allow_nan=False), flush=True)
-                time.sleep(max(0, 0.1 - (time.monotonic() - started)))
+                time.sleep(max(0, 0.2 - (time.monotonic() - started)))
     finally:
         camera.release()
 
