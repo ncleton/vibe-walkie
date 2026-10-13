@@ -10,7 +10,9 @@ public partial class App : Application
 
     public App()
     {
+        LocalDiagnostics.StartupStage("app_constructor");
         InitializeComponent();
+        LocalDiagnostics.StartupStage("app_resources_ready");
         UnhandledException += (_, args) =>
         {
             LocalDiagnostics.Record("unhandled", args.Exception);
@@ -21,7 +23,9 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        LocalDiagnostics.StartupStage("on_launched");
         var instance = AppInstance.FindOrRegisterForKey("VibeWalkie.Companion");
+        LocalDiagnostics.StartupStage(instance.IsCurrent ? "primary_instance" : "secondary_instance");
         if (!instance.IsCurrent)
         {
             await instance.RedirectActivationToAsync(AppInstance.GetCurrent().GetActivatedEventArgs());
@@ -31,15 +35,19 @@ public partial class App : Application
         instance.Activated += (_, _) => _window?.DispatcherQueue.TryEnqueue(() => _window.ShowFromTray());
         _window = new MainWindow();
         _window.Activate();
+        LocalDiagnostics.StartupStage("window_activated");
         try
         {
             Runtime = new CompanionRuntime(_window.DispatcherQueue);
             _window.Bind(Runtime);
+            LocalDiagnostics.StartupStage("runtime_bound");
             await Runtime.StartAsync();
+            LocalDiagnostics.StartupStage("runtime_started");
         }
         catch (Exception error)
         {
             LocalDiagnostics.Record("startup_failed", error);
+            LocalDiagnostics.StartupStage("runtime_error_" + error.GetType().Name);
             _window.ShowFailure(error is InvalidOperationException or System.IO.InvalidDataException ? error.Message : "Le compagnon n’a pas démarré. Vérifiez le diagnostic et les autorisations Windows, puis relancez Vibe Walkie.");
         }
     }

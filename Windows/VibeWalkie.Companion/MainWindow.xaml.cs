@@ -27,8 +27,11 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        LocalDiagnostics.StartupStage("window_constructor");
         InitializeComponent();
+        LocalDiagnostics.StartupStage("window_xaml_ready");
         _tray = new TrayIconService(this);
+        LocalDiagnostics.StartupStage("tray_ready");
         _tray.QuitRequested += async () => await QuitAsync();
         var handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var id = Win32Interop.GetWindowIdFromWindow(handle);

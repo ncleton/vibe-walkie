@@ -4,6 +4,7 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $Executable = Join-Path $Root 'build/windows-native-validation/VibeWalkie.Companion.exe'
+$env:VIBEWALKIE_UI_DIAGNOSTIC_PATH = Join-Path $env:RUNNER_TEMP 'vibewalkie-ui-startup.log'
 $Process = Start-Process -FilePath $Executable -PassThru
 try {
     $Window = $null
@@ -20,7 +21,11 @@ try {
         $Window = $null
         Start-Sleep -Milliseconds 100
     }
-    if ($null -eq $Window) { throw 'The real WinUI window did not become accessible.' }
+    if ($null -eq $Window) {
+        if (Test-Path $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH) { Get-Content $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH }
+        Write-Output "UI process session: $($Process.SessionId); test session: $((Get-Process -Id $PID).SessionId)"
+        throw 'The real WinUI window did not become accessible.'
+    }
     $Condition = [System.Windows.Automation.PropertyCondition]::new(
         [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
         [System.Windows.Automation.ControlType]::Button)
