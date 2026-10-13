@@ -7,7 +7,7 @@ namespace VibeWalkie.Companion.Windows;
 
 public sealed class WindowCatalog
 {
-    public WindowsSnapshotPayload Snapshot()
+    public WindowsSnapshotPayload Snapshot(bool includeIcons = true)
     {
         var foreground = Native.GetForegroundWindow();
         var windows = new List<(int ProcessID, nint Handle, string Title, bool Minimized)>();
@@ -30,7 +30,7 @@ public sealed class WindowCatalog
             var processName = TryProcessName(group.Key);
             return new RemoteApplication(
                 group.Key.ToString(), processName, group.Key.ToString(),
-                group.Any(item => item.Handle == foreground), null,
+                group.Any(item => item.Handle == foreground), includeIcons ? IconForProcess(group.Key) : null,
                 group.Select(item => new RemoteWindow(
                     item.Handle.ToInt64().ToString("x"), item.Title, item.Handle == foreground, item.Minimized)).ToArray());
         }).OrderByDescending(static app => app.IsActive).ThenBy(static app => app.Name).ToArray();
@@ -58,7 +58,8 @@ public sealed class WindowCatalog
         }
         if (handle == 0) throw new ProtocolException(RemoteErrorCode.ApplicationNotFound);
         if (Native.IsIconic(handle)) Native.ShowWindow(handle, 9);
-        if (!Native.SetForegroundWindow(handle)) throw new ProtocolException(RemoteErrorCode.ActivationDenied);
+        if (Native.GetForegroundWindow() != handle && !Native.SetForegroundWindow(handle)) throw new ProtocolException(RemoteErrorCode.ActivationDenied);
+        if (Native.GetForegroundWindow() != handle) throw new ProtocolException(RemoteErrorCode.ActivationDenied);
     }
 
     private static bool IsWindowForProcess(nint handle, int processID)
@@ -68,6 +69,24 @@ public sealed class WindowCatalog
         return candidateProcess == processID;
     }
 
+    private static byte[]? IconForProcess(int id)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(id);
+            var path = process.MainModule?.FileName;
+            if (path is null) return null;
+            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+            if (icon is null) return null;
+            using var original = icon.ToBitmap();
+            using var bitmap = new System.Drawing.Bitmap(original, new System.Drawing.Size(64, 64));
+            using var stream = new MemoryStream(); bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png); return stream.ToArray();
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or ArgumentException)
+        {
+            LocalDiagnostics.Record("window_icon_unavailable", error); return null;
+        }
+    }
     private static string TryProcessName(int id) { try { return Process.GetProcessById(id).ProcessName; } catch { return "Application"; } }
     private static bool IsCloaked(nint window) => Native.DwmGetWindowAttribute(window, 14, out var cloaked, sizeof(int)) == 0 && cloaked != 0;
 

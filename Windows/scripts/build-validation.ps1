@@ -25,9 +25,14 @@ try {
     $BinPath = (& swift build --package-path Shared/PostureCore -c release --show-bin-path).Trim()
     Copy-Item (Join-Path $BinPath 'PostureCore.exe') $Core
     $Target = & swift -print-target-info | ConvertFrom-Json
-    foreach ($RuntimePath in $Target.paths.runtimeLibraryPaths) {
-        Get-ChildItem -LiteralPath $RuntimePath -Filter '*.dll' | Copy-Item -Destination $Core -Force
+    $SwiftBin = Split-Path (Get-Command swift).Source -Parent
+    $RuntimePaths = @($Target.paths.runtimeLibraryPaths) + @($SwiftBin, (Join-Path $env:SDKROOT 'usr/bin'))
+    foreach ($RuntimePath in $RuntimePaths | Select-Object -Unique) {
+        if (Test-Path -LiteralPath $RuntimePath) {
+            Get-ChildItem -LiteralPath $RuntimePath -Filter '*.dll' | Copy-Item -Destination $Core -Force
+        }
     }
+    if (-not (Test-Path (Join-Path $Core 'swiftCore.dll'))) { throw 'The self-contained posture runtime is incomplete: swiftCore.dll is missing.' }
     $Files = Get-ChildItem $Output -Recurse -File | ForEach-Object {
         @{ path = $_.FullName.Substring($Output.Length + 1); sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     }

@@ -83,7 +83,7 @@ public sealed class SessionRouter
                     RemoteMessageType.KeyboardText => Keyboard(envelope.DecodePayload<KeyboardTextPayload>()),
                     RemoteMessageType.KeyPress => Key(envelope.DecodePayload<KeyPressPayload>()),
                     RemoteMessageType.HostShortcutPress => Shortcut(envelope.DecodePayload<HostShortcutPressPayload>()),
-                    RemoteMessageType.ListWindows => Snapshot(),
+                    RemoteMessageType.ListWindows => Snapshot(envelope.DecodePayload<ListWindowsPayload>().IncludeIcons),
                     RemoteMessageType.ActivateWindow => Activate(envelope.DecodePayload<ActivateWindowPayload>()),
                     RemoteMessageType.PointerMove => Move(envelope.DecodePayload<PointerMovePayload>()),
                     RemoteMessageType.PointerAbsolute => Absolute(envelope.DecodePayload<PointerAbsolutePayload>()),
@@ -134,7 +134,7 @@ public sealed class SessionRouter
         return Ack();
     }
     private RouteResponse Shortcut(HostShortcutPressPayload payload) { _shortcuts.Execute(payload.ShortcutID, _input); return Ack(); }
-    private RouteResponse Snapshot() => new(RemoteMessageType.WindowsSnapshot, CanonicalJson.SerializeToUtf8Bytes(_windows.Snapshot()));
+    private RouteResponse Snapshot(bool includeIcons) => new(RemoteMessageType.WindowsSnapshot, CanonicalJson.SerializeToUtf8Bytes(_windows.Snapshot(includeIcons)));
     private RouteResponse Activate(ActivateWindowPayload payload) { _windows.Activate(payload.ApplicationID, payload.WindowID); return Ack(); }
     private RouteResponse Move(PointerMovePayload payload) { _input.PointerMove(InputControlPolicy.GestureDelta(payload.DeltaX), InputControlPolicy.GestureDelta(payload.DeltaY)); return Ack(); }
     private RouteResponse Absolute(PointerAbsolutePayload payload) { _input.PointerAbsolute(InputControlPolicy.NormalizedCoordinate(payload.NormalizedX), InputControlPolicy.NormalizedCoordinate(payload.NormalizedY)); return Ack(); }

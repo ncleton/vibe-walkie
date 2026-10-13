@@ -1,7 +1,7 @@
 name: Native Mac and Windows parity
 on:
   push:
-    branches: [main, codex/windows-mac-parity]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 concurrency:
@@ -41,6 +41,7 @@ jobs:
       - run: dotnet build Windows/VibeWalkie.WindowsCore/VibeWalkie.WindowsCore.csproj -c Release
       - run: swift test --package-path Shared/PostureCore -c release
       - run: ./Windows/scripts/build-validation.ps1
+      - run: ./Windows/scripts/test-native-window.ps1
       - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
       - uses: actions/upload-artifact@v4
         if: always()

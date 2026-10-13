@@ -77,6 +77,8 @@ public sealed class VoiceActionsService(InputService input)
                 }
             }
             var textChoices = Regex.Matches(payload.Text, "[«\"“]([^»\"”]+)[»\"”]").Select((match, index) => (ID: "text_" + index, Text: match.Groups[1].Value)).ToDictionary(value => value.ID, value => value.Text);
+            var dictated = Regex.Match(payload.Text, @"^(?:écris|ecris|tape|saisis|dicte|écrire|ecrire|taper|saisir)\s+(.+?)(?:\s+dans\s+.+)?$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (dictated.Success) textChoices["dictated_text"] = dictated.Groups[1].Value.Trim();
             var resources = Regex.Matches(payload.Text, @"https://[^\s<>\""»]+|[A-Za-z]:\\[^\r\n\""»]+")
                 .Select((match, index) => (ID: "resource_" + index, Text: match.Value.TrimEnd('.', ','))).ToDictionary(value => value.ID, value => value.Text);
             var coordinates = Regex.Matches(payload.Text, @"\bx\s*[=:]\s*(\d{1,5})\s*[,; ]+y\s*[=:]\s*(\d{1,5})", RegexOptions.IgnoreCase)
@@ -240,7 +242,12 @@ public sealed class VoiceActionsService(InputService input)
             {
                 var actions = new HashSet<string> { "focus" };
                 if (element.GetCurrentPattern(UIA_PatternIds.UIA_InvokePatternId) is IUIAutomationInvokePattern) actions.Add("invoke");
-                if (element.GetCurrentPattern(UIA_PatternIds.UIA_ValuePatternId) is IUIAutomationValuePattern value && value.CurrentIsReadOnly == 0) actions.Add("fill");
+                if (element.GetCurrentPattern(UIA_PatternIds.UIA_ValuePatternId) is IUIAutomationValuePattern value)
+                {
+                    if (value.CurrentIsReadOnly == 0) actions.Add("fill");
+                    var current = value.CurrentValue;
+                    if (current.Length <= 2_000) label += " — valeur actuelle : " + current;
+                }
                 elements["element_" + elements.Count] = new Candidate(element, element.GetRuntimeId(), label, actions);
             }
             if (depth >= 32) continue;

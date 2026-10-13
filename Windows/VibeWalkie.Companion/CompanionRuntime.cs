@@ -90,7 +90,7 @@ public sealed class CompanionRuntime : IAsyncDisposable
     {
         _nomad = await TailscaleDetector.DetectAsync();
         var elevated = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
-        using var screen = new ScreenCaptureService();
+        await using var screen = new ScreenCaptureService();
         var listening = _server.IsListening;
         var published = _publisher.IsPublished;
         var inputReady = _server.InputControlReady;

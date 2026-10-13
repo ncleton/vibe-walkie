@@ -132,7 +132,7 @@ public sealed partial class MainWindow : Window
     private readonly List<(GlobalButtonConfiguration Original, TextBox Title, ComboBox Action)> _globalEditors = [];
     private Dictionary<string, ControlButtonAction> ActionChoices()
     {
-        var choices = Enum.GetValues<RemoteKey>().ToDictionary(value => value.ToString(), value => new ControlButtonAction("standard_key", value));
+        var choices = Enum.GetValues<RemoteKey>().ToDictionary(KeyLabel, value => new ControlButtonAction("standard_key", value));
         choices["Clavier"] = new ControlButtonAction("show_keyboard"); choices["Aucune action"] = new ControlButtonAction("none");
         foreach (var shortcut in _runtime?.Configuration.AvailableShortcuts ?? []) choices[shortcut.DisplayName + " (raccourci)"] = new ControlButtonAction("host_shortcut", Shortcut: shortcut);
         return choices;
@@ -146,7 +146,14 @@ public sealed partial class MainWindow : Window
             var title = new TextBox { Text = button.Title, Header = button.Zone, MaxLength = 80 };
             var action = new ComboBox { ItemsSource = choices.Keys.ToArray(), HorizontalAlignment = HorizontalAlignment.Stretch };
             action.SelectedItem = choices.FirstOrDefault(item => item.Value == button.Action).Key;
-            var row = new StackPanel { Spacing = 4 }; row.Children.Add(title); row.Children.Add(action); ControlsEditor.Children.Add(row);
+            var row = new StackPanel { Spacing = 4 }; row.Children.Add(title); row.Children.Add(action);
+            var icon = new Button { Content = "Choisir une image" };
+            icon.Click += async (_, _) =>
+            {
+                try { var image = await PickIconAsync(); if (image is { } selected) { var editor = _controlEditors[button.Zone]; _controlEditors[button.Zone] = (editor.Original with { Icon = selected }, editor.Title, editor.Action); } }
+                catch (Exception error) { LocalDiagnostics.Record("icon_selection_failed", error); ShowFailure("Choisissez une image PNG ou JPEG valide pour cette commande."); }
+            };
+            row.Children.Add(icon); ControlsEditor.Children.Add(row);
             _controlEditors[button.Zone] = (button, title, action);
         }
         foreach (var button in configuration.GlobalButtons) AddGlobalEditor(button);
@@ -157,6 +164,30 @@ public sealed partial class MainWindow : Window
         var action = new ComboBox { ItemsSource = choices.Keys.ToArray(), HorizontalAlignment = HorizontalAlignment.Stretch };
         action.SelectedItem = choices.FirstOrDefault(item => item.Value == button.Action).Key;
         var row = new StackPanel { Spacing = 4 }; row.Children.Add(title); row.Children.Add(action);
+        var movement = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        foreach (var direction in new[] { -1, 1 })
+        {
+            var move = new Button { Content = direction < 0 ? "Monter" : "Descendre" };
+            move.Click += (_, _) =>
+            {
+                var index = _globalEditors.FindIndex(item => item.Original.ID == button.ID); var next = index + direction;
+                if (index < 0 || next < 0 || next >= _globalEditors.Count) return;
+                var editor = _globalEditors[index]; _globalEditors.RemoveAt(index); _globalEditors.Insert(next, editor);
+                GlobalEditor.Children.Remove(row); GlobalEditor.Children.Insert(next, row);
+            };
+            movement.Children.Add(move);
+        }
+        var icon = new Button { Content = "Choisir une image" };
+        icon.Click += async (_, _) =>
+        {
+            try
+            {
+                var image = await PickIconAsync(); var index = _globalEditors.FindIndex(item => item.Original.ID == button.ID);
+                if (image is { } selected && index >= 0) { var editor = _globalEditors[index]; _globalEditors[index] = (editor.Original with { Icon = selected }, editor.Title, editor.Action); }
+            }
+            catch (Exception error) { LocalDiagnostics.Record("icon_selection_failed", error); ShowFailure("Choisissez une image PNG ou JPEG valide pour cette commande."); }
+        };
+        row.Children.Add(icon); row.Children.Add(movement);
         var remove = new Button { Content = "Supprimer cette commande" };
         remove.Click += (_, _) => { GlobalEditor.Children.Remove(row); _globalEditors.RemoveAll(item => item.Original.ID == button.ID); };
         row.Children.Add(remove); GlobalEditor.Children.Add(row); _globalEditors.Add((button, title, action));
@@ -182,6 +213,26 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception error) { LocalDiagnostics.Record("configuration_edit_failed", error); ShowFailure("Choisissez une action pour chaque commande avant d’appliquer la disposition."); }
     }
+    private async Task<JsonElement?> PickIconAsync()
+    {
+        var picker = new global::Windows.Storage.Pickers.FileOpenPicker();
+        picker.FileTypeFilter.Add(".png"); picker.FileTypeFilter.Add(".jpg"); picker.FileTypeFilter.Add(".jpeg");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        var file = await picker.PickSingleFileAsync(); if (file is null) return null;
+        using var source = System.Drawing.Image.FromFile(file.Path);
+        var scale = Math.Min(1, 128d / Math.Max(source.Width, source.Height));
+        using var bitmap = new System.Drawing.Bitmap(source, new System.Drawing.Size(Math.Max(1, (int)(source.Width * scale)), Math.Max(1, (int)(source.Height * scale))));
+        using var bytes = new MemoryStream(); bitmap.Save(bytes, System.Drawing.Imaging.ImageFormat.Png);
+        if (bytes.Length > 65_536) throw new InvalidDataException("Image trop volumineuse.");
+        return JsonSerializer.SerializeToElement(new { customImage = new { _0 = Convert.ToBase64String(bytes.ToArray()) } });
+    }
+    private static string KeyLabel(RemoteKey key) => key switch
+    {
+        RemoteKey.Enter => "Entrée", RemoteKey.Escape => "Échap", RemoteKey.Tab => "Tabulation", RemoteKey.ApplicationSwitcher => "App précédente",
+        RemoteKey.NextConversation => "Suivant", RemoteKey.Backspace => "Effacer", RemoteKey.Delete => "Supprimer", RemoteKey.ArrowUp => "Haut", RemoteKey.ArrowDown => "Bas",
+        RemoteKey.ArrowLeft => "Gauche", RemoteKey.ArrowRight => "Droite", RemoteKey.Space => "Espace", RemoteKey.Copy => "Copier", RemoteKey.Paste => "Coller",
+        RemoteKey.Cut => "Couper", RemoteKey.SelectAll => "Tout sélectionner", RemoteKey.RightClick => "Clic droit", RemoteKey.CloseWindow => "Fermer la fenêtre", _ => throw new InvalidOperationException("Commande inconnue.")
+    };
     public void ShowFailure(string detail) { StatusBar.Title = detail; StatusBar.Severity = InfoBarSeverity.Error; StatusBar.IsOpen = true; }
     private async void RefreshCameras_Click(object sender, RoutedEventArgs e)
     {

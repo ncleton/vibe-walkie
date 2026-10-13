@@ -26,7 +26,8 @@ public sealed class ConfigurationStore
         _configuration = stored is { Revision: 0 } && stored.GlobalButtons.Count == 0
             ? DefaultConfiguration()
             : stored ?? DefaultConfiguration();
-        _configuration = InstallingBuiltInButtons(_configuration);
+        // Explicitly empty or customized palettes are user choices.
+        // Defaults are installed only for the known revision-zero migration.
     }
 
     public ControlConfiguration Current => _configuration with { AvailableShortcuts = _shortcuts.References };
@@ -40,9 +41,13 @@ public sealed class ConfigurationStore
             || requested.GlobalButtons.Select(static button => button.ID).Distinct(StringComparer.Ordinal).Count() != requested.GlobalButtons.Count)
             throw new ProtocolException(RemoteErrorCode.UnsupportedCapability, "Palette globale invalide");
         var references = _shortcuts.References.ToDictionary(static value => value.ID, StringComparer.Ordinal);
+        foreach (var button in requested.Buttons)
+            ValidatePresentation(button.Title, button.Icon);
+        foreach (var button in requested.GlobalButtons)
+            ValidatePresentation(button.Title, button.Icon);
         var buttons = requested.Buttons.Select(button => button with { Action = ValidateAction(button.Action, references) }).ToArray();
         var globalButtons = requested.GlobalButtons.Select(button => button with { Action = ValidateAction(button.Action, references) }).ToArray();
-        _configuration = requested with
+        var next = requested with
         {
             Buttons = buttons,
             GlobalButtons = globalButtons,
@@ -51,8 +56,11 @@ public sealed class ConfigurationStore
             AvailableShortcuts = null,
         };
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        var clear = CanonicalJson.SerializeToUtf8Bytes(_configuration);
-        File.WriteAllBytes(_path, ProtectedData.Protect(clear, null, DataProtectionScope.CurrentUser));
+        var clear = CanonicalJson.SerializeToUtf8Bytes(next);
+        var temporary = _path + ".tmp";
+        File.WriteAllBytes(temporary, ProtectedData.Protect(clear, null, DataProtectionScope.CurrentUser));
+        File.Move(temporary, _path, overwrite: true);
+        _configuration = next;
     }
 
     private static ControlButtonAction ValidateAction(
@@ -61,7 +69,7 @@ public sealed class ConfigurationStore
     {
         return action.Type switch
         {
-            "standard_key" when action.Key is not null => action with { Shortcut = null },
+            "standard_key" when action.Key is { } key && Enum.IsDefined(key) => action with { Shortcut = null },
             "host_shortcut" when action.Shortcut is not null && references.TryGetValue(action.Shortcut.ID, out var reference) =>
                 action with { Key = null, Shortcut = reference },
             "show_keyboard" => new ControlButtonAction("show_keyboard"),
@@ -70,6 +78,20 @@ public sealed class ConfigurationStore
         };
     }
 
+    private static void ValidatePresentation(string title, JsonElement icon)
+    {
+        if (title is null || title.Length > 80 || icon.ValueKind != JsonValueKind.Object)
+            throw new ProtocolException(RemoteErrorCode.ProtocolMismatch);
+        if (icon.TryGetProperty("system", out var system) && system.TryGetProperty("_0", out var name)
+            && name.ValueKind == JsonValueKind.String && name.GetString() is { Length: > 0 and <= 128 }) return;
+        if (icon.TryGetProperty("customImage", out var image) && image.TryGetProperty("_0", out var encoded)
+            && encoded.ValueKind == JsonValueKind.String)
+        {
+            try { if (Convert.FromBase64String(encoded.GetString()!).Length <= 65_536) return; }
+            catch (FormatException) { }
+        }
+        throw new ProtocolException(RemoteErrorCode.ProtocolMismatch);
+    }
     private ControlConfiguration? Load()
     {
         try
