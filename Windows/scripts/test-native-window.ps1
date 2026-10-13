@@ -7,13 +7,17 @@ $Executable = Join-Path $Root 'build/windows-native-validation/VibeWalkie.Compan
 $Process = Start-Process -FilePath $Executable -PassThru
 try {
     $Window = $null
-    for ($Attempt = 0; $Attempt -lt 100; $Attempt++) {
+    $ProcessCondition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$Process.Id)
+    for ($Attempt = 0; $Attempt -lt 300; $Attempt++) {
         $Process.Refresh()
         if ($Process.HasExited) { throw "The actual WinUI companion exited during startup (exit $($Process.ExitCode))." }
-        if ($Process.MainWindowHandle -ne 0) {
-            $Window = [System.Windows.Automation.AutomationElement]::FromHandle($Process.MainWindowHandle)
-            if ($null -ne $Window) { break }
-        }
+        # WinUI's top-level window can be missed by Process.MainWindowHandle.
+        # Query the actual automation tree by the launched process identity.
+        $Window = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
+            [System.Windows.Automation.TreeScope]::Children, $ProcessCondition)
+        if ($null -ne $Window -and $Window.Current.Name -eq 'Vibe Walkie') { break }
+        $Window = $null
         Start-Sleep -Milliseconds 100
     }
     if ($null -eq $Window) { throw 'The real WinUI window did not become accessible.' }
