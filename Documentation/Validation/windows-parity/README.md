@@ -180,6 +180,29 @@ ci-dessus ont le même arbre Git `7dd4eb0a72f203eef9e0aa3df76d5bc346c01b84`.
 `artifact-audit-5339.json` conserve cet audit avec l’échec de CI et
 `ordinaryUserValidated: false` ; aucune preuve manquante n’est supposée.
 
+## Diagnostic final des droits de session
+
+L’[exécution 38498670719](https://github.com/ncleton/vibe-walkie/actions/runs/38498670719),
+révision `2b9510e0b35b7f794c2640c0f590fb5bbbfd12ab`, confirme 68 tests Windows
+réussis et deux essais supplémentaires bloqués. Le helper vérifie maintenant
+l’élévation réelle de l’Explorateur avant de demander un jeton lié ; si son jeton
+est déjà non élevé, il l’utilise directement. Le jeton utilisé doit être
+réellement non élevé et appartenir au compte du bureau connecté.
+
+Le runner testé présente un Explorateur élevé et un type d’élévation 1.
+La demande de son jeton lié échoue avec **Win32 1312** (aucune session de
+connexion correspondante). Ce diagnostic ne suppose pas une cause dans le
+compagnon et ne prouve pas le comportement d’une session Windows 11 ordinaire.
+La CI complète reste en échec ; les essais WPF et WinUI sans privilèges
+administrateur ne sont pas considérés comme validés.
+
+La source du compagnon n’a pas changé depuis l’artefact audité `5339` ; cette
+révision corrige uniquement le contexte et le diagnostic du test. Aucun paquet
+signé, aucune installation de confiance et aucun parcours webcam/iPhone ne
+sont ajoutés aux preuves. Il faut une véritable session Windows 11 avec webcam,
+un iPhone pour les parcours réseau et le certificat Windows de publication
+pour poursuivre la validation complète.
+
 ## Blocages de livraison
 
 - Aucun accès à une machine Windows 11 avec webcam n’est actuellement fourni
