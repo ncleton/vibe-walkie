@@ -9,7 +9,13 @@ if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) { $EvidenceDirectory = Joi
 if (-not (Test-Path -LiteralPath $EvidenceDirectory)) { New-Item -ItemType Directory -Path $EvidenceDirectory | Out-Null }
 $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH = Join-Path $EvidenceDirectory 'ui-startup.log'
 if (Test-Path $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH) { Remove-Item -LiteralPath $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH }
-$Process = Start-Process -FilePath $Executable -PassThru
+# Create the GUI process directly so the test's environment and desktop are
+# inherited by this exact process, including the opt-in stage diagnostic path.
+$Start = [Diagnostics.ProcessStartInfo]::new($Executable)
+$Start.UseShellExecute = $false
+$Start.WorkingDirectory = Split-Path -Parent $Executable
+$Start.EnvironmentVariables['VIBEWALKIE_UI_DIAGNOSTIC_PATH'] = $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH
+$Process = [Diagnostics.Process]::Start($Start)
 try {
     $Window = $null
     $ProcessCondition = [System.Windows.Automation.PropertyCondition]::new(
@@ -28,6 +34,9 @@ try {
     if ($null -eq $Window) {
         if (Test-Path $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH) { Get-Content $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH }
         Write-Output "UI process session: $($Process.SessionId); test session: $((Get-Process -Id $PID).SessionId)"
+        $Modules = @($Process.Modules | ForEach-Object { $_.ModuleName })
+        $Metadata = 'startup_modules ' + ($Modules -join ',')
+        Add-Content -LiteralPath $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH -Value $Metadata
         throw "The real WinUI window did not become accessible. App session: $($Process.SessionId); verifier session: $((Get-Process -Id $PID).SessionId)."
     }
     $RuntimeStarted = $false
