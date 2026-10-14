@@ -1,0 +1,25 @@
+{
+  "artifactId": 11863942643,
+  "runId": 38497057049,
+  "headCommit": "5339ac3a4ea440355d25538f346384b8ab927d87",
+  "ciCommit": "cda836fa5cc745b86d5b22c8ce6a4bfa0513fe70",
+  "archiveSha256": "00070915459f90ed96a8fe79c9a7f4a7ce6a37d50d997c4ff396e04d2536d400",
+  "filesVerified": 1993,
+  "nativeUiEvidence": {
+    "title": "Vibe Walkie",
+    "nativeWindow": true,
+    "requiredControls": true,
+    "unpackagedUpdateError": true,
+    "cameraSelectionError": true,
+    "configurationPersisted": true,
+    "runtimeStarted": true,
+    "gracefulExit": true
+  },
+  "peWindowsCompatibility": true,
+  "pePerMonitorV2": true,
+  "signed": false,
+  "purpose": "validation",
+  "ordinaryUserValidated": false,
+  "ciConclusion": "failure",
+  "blockingCondition": "The hosted Explorer does not provide the required genuine unelevated UAC-linked token."
+}

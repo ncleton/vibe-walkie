@@ -1,0 +1,70 @@
+name: Native Mac and Windows parity
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: native-companions-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: python3 scripts/verify-companion-parity.py
+      - run: dotnet test Windows/VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj -c Release
+      - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
+      - run: swift test --package-path Shared/PostureCore -c release
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/verify-companion-parity.py
+      - run: dotnet test Windows/VibeWalkie.Protocol.Tests/VibeWalkie.Protocol.Tests.csproj -c Release
+      - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
+      - run: dotnet build Windows/VibeWalkie.WindowsCore/VibeWalkie.WindowsCore.csproj -c Release
+      - run: ./Windows/scripts/create-ci-desktop-user.ps1
+      - id: desktop-tests
+        continue-on-error: true
+        run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release --filter 'Category!=BundledRuntime' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
+      - name: Read fixed desktop-test stages
+        if: always()
+        run: |
+          $Stages = Join-Path $env:RUNNER_TEMP 'native-wpf-progress.log'
+          if (Test-Path -LiteralPath $Stages) { Get-Content -LiteralPath $Stages }
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.0'
+      - run: swift test --package-path Shared/PostureCore -c release
+      - run: ./Windows/scripts/build-validation.ps1
+      - run: ./Windows/scripts/test-native-window.ps1
+        shell: powershell
+      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release --filter 'Category=BundledRuntime' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 3m --blame-hang-dump-type none
+      - name: Require successful native desktop tests
+        if: always() && steps.desktop-tests.outcome != 'success'
+        run: throw 'Real native desktop tests failed or were skipped. Windows validation and release are blocked.'
+      - run: ./Windows/scripts/test-package.ps1
+      - name: Remove the disposable standard test account
+        if: always() && env.VIBEWALKIE_TEST_USERNAME != ''
+        run: Remove-LocalUser -Name $env:VIBEWALKIE_TEST_USERNAME
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('build/windows-native-validation/**') != ''
+        with:
+          name: windows-native-validation
+          path: |
+            build/windows-native-validation/
+            build/windows-msix-validation/
+          if-no-files-found: error
