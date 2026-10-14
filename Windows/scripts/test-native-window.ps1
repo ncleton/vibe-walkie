@@ -48,6 +48,52 @@ try {
     foreach ($Required in @('Nouveau QR', 'Démarrer le coach', 'Appliquer les commandes', 'Rechercher une mise à jour', 'Quitter Vibe Walkie')) {
         if ($Names -notcontains $Required) { throw "The actual WinUI window is missing the expected control: $Required" }
     }
+    function Invoke-NativeButton([string]$Label) {
+        $Button = $Window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $Condition) |
+            Where-Object { $_.Current.Name -eq $Label } | Select-Object -First 1
+        if ($null -eq $Button) { throw "The real window has no button: $Label" }
+        ([System.Windows.Automation.InvokePattern]$Button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+    }
+    function Require-NativeText([string]$Expected) {
+        $TextCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::Text)
+        for ($Attempt = 0; $Attempt -lt 100; $Attempt++) {
+            $Texts = $Window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $TextCondition)
+            if (@($Texts | Where-Object { $_.Current.Name.Contains($Expected) }).Count -gt 0) { return }
+            Start-Sleep -Milliseconds 100
+        }
+        throw 'The real companion did not display the expected actionable state.'
+    }
+    $TitleCondition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'control-title-upper_left')
+    $TitleField = $null
+    for ($Attempt = 0; $Attempt -lt 100; $Attempt++) {
+        $TitleField = $Window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $TitleCondition)
+        if ($null -ne $TitleField) { break }
+        Start-Sleep -Milliseconds 100
+    }
+    if ($null -eq $TitleField) { throw 'The actual seven-zone command editor was not populated.' }
+    $Value = [System.Windows.Automation.ValuePattern]$TitleField.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    $Value.SetValue('Validation Windows')
+    Invoke-NativeButton 'Appliquer les commandes'
+    Add-Type -AssemblyName System.Security
+    $ConfigurationPath = Join-Path $env:LOCALAPPDATA 'VibeWalkie/configuration.dpapi'
+    $Persisted = $false
+    for ($Attempt = 0; $Attempt -lt 100; $Attempt++) {
+        if (Test-Path -LiteralPath $ConfigurationPath) {
+            $Bytes = [Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($ConfigurationPath), $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
+            $Configuration = [Text.Encoding]::UTF8.GetString($Bytes) | ConvertFrom-Json
+            $UpperLeft = $Configuration.buttons | Where-Object { $_.zone -eq 'upper_left' }
+            if ($Configuration.buttons.Count -eq 7 -and $UpperLeft.title -eq 'Validation Windows') { $Persisted = $true; break }
+        }
+        Start-Sleep -Milliseconds 100
+    }
+    if (-not $Persisted) { throw 'Applying the real command editor did not persist the verified DPAPI configuration.' }
+    Invoke-NativeButton 'Rechercher une mise à jour'
+    Require-NativeText 'Installez le paquet MSIX signé'
+    Invoke-NativeButton 'Démarrer le coach'
+    Require-NativeText 'Actualisez les caméras'
     $WindowTitle = $Window.Current.Name
     $Quit = $Buttons | Where-Object { $_.Current.Name -eq 'Quitter Vibe Walkie' } | Select-Object -First 1
     $Invoke = [System.Windows.Automation.InvokePattern]$Quit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
@@ -56,7 +102,7 @@ try {
     if ($Process.ExitCode -ne 0) { throw "The actual companion failed during shutdown (exit $($Process.ExitCode))." }
     # Only UI control names are exported. Never export the generated pairing QR,
     # confirmation secret, TLS identity, screenshots or the user's camera.
-    @{ nativeWindow = $true; title = $WindowTitle; requiredControls = $true; runtimeStarted = $true; gracefulExit = $true } |
+    @{ nativeWindow = $true; title = $WindowTitle; requiredControls = $true; runtimeStarted = $true; gracefulExit = $true; configurationPersisted = $true; unpackagedUpdateError = $true; cameraSelectionError = $true } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'build/windows-native-validation/native-window-evidence.json') -Encoding utf8
 } finally {
     if (-not $Process.HasExited) { Stop-Process -Id $Process.Id -Force }

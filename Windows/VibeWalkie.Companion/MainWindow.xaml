@@ -8,7 +8,7 @@
       <StackPanel Spacing="18" Padding="28" MaxWidth="760" HorizontalAlignment="Center">
         <TextBlock Text="Vibe Walkie" FontSize="34" FontWeight="SemiBold" />
         <TextBlock Text="Votre ordinateur sous la main, depuis votre iPhone" FontSize="16" Opacity="0.7" />
-        <InfoBar x:Name="StatusBar" IsOpen="True" Severity="Informational" Title="Démarrage…" />
+        <InfoBar x:Name="StatusBar" AutomationProperties.AutomationId="app-status" IsOpen="True" Severity="Informational" Title="Démarrage…" />
 
         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="16" Padding="20">
           <StackPanel Spacing="12">
@@ -61,7 +61,7 @@
         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="16" Padding="20">
           <StackPanel Spacing="12">
             <TextBlock Text="Mises à jour" FontSize="22" FontWeight="SemiBold" />
-            <TextBlock x:Name="UpdateStatus" Text="Le canal Windows vérifie automatiquement les mises à jour à l’ouverture." TextWrapping="Wrap" />
+            <TextBlock x:Name="UpdateStatus" Text="Consultez les mises à jour de Vibe Walkie pour cet ordinateur." TextWrapping="Wrap" />
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Rechercher une mise à jour" Click="CheckUpdate_Click" />
               <Button Content="Mettre à jour maintenant" Click="InstallUpdate_Click" />

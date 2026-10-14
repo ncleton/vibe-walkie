@@ -154,6 +154,7 @@ public sealed partial class MainWindow : Window
         foreach (var button in configuration.Buttons)
         {
             var title = new TextBox { Text = button.Title, Header = button.Zone, MaxLength = 80 };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(title, "control-title-" + button.Zone);
             var action = new ComboBox { ItemsSource = choices.Keys.ToArray(), HorizontalAlignment = HorizontalAlignment.Stretch };
             action.SelectedItem = choices.FirstOrDefault(item => item.Value == button.Action).Key;
             var row = new StackPanel { Spacing = 4 }; row.Children.Add(title); row.Children.Add(action);
@@ -311,11 +312,15 @@ public sealed partial class MainWindow : Window
         try { if (_runtime is not null) await _runtime.Updates.InstallAsync(); }
         catch (Exception error) { ShowFailure(error.Message); }
     }
+    private bool _settingStartup;
     private async void Startup_Toggled(object sender, RoutedEventArgs e)
     {
-        if (_runtime is null) return;
-        try { await UpdateController.SetStartupAsync(StartupSwitch.IsOn); }
-        catch (Exception error) { ShowFailure(error.Message); }
+        if (_runtime is null || _settingStartup) return;
+        var requested = StartupSwitch.IsOn;
+        _settingStartup = true;
+        try { StartupSwitch.IsOn = await UpdateController.SetStartupAsync(requested); }
+        catch (Exception error) { StartupSwitch.IsOn = !requested; ShowFailure(error.Message); }
+        finally { _settingStartup = false; }
     }
     private async void Quit_Click(object sender, RoutedEventArgs e) => await QuitAsync();
     private async Task QuitAsync() { if (_runtime is not null) await _runtime.DisposeAsync(); _tray?.Dispose(); Application.Current.Exit(); }
