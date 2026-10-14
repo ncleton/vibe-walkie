@@ -5,6 +5,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Runtime.InteropServices;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using VibeWalkie.Companion.Network;
@@ -124,7 +125,19 @@ public sealed class WindowsWireTests
         Assert.Equal(RemoteMessageType.PairingPending, (await second.ReadAsync()).Type);
         host.Authority.ResolvePending(true);
         Assert.Equal(RemoteErrorCode.InputUnavailable, (await second.ReadAsync()).DecodePayload<RemoteErrorPayload>().Code);
+        var drag = first.Envelope(RemoteMessageType.PointerDrag, new PointerDragPayload(DragPhase.Began, 0, 0));
+        await first.SendAsync(drag);
+        Assert.True((await first.ReplyAsync(drag.MessageID, RemoteMessageType.Acknowledgement)).DecodePayload<AcknowledgementPayload>().Ok);
+        for (var attempt = 0; attempt < 40 && (GetAsyncKeyState(1) & 0x8000) == 0; attempt++)
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+        Assert.NotEqual(0, GetAsyncKeyState(1) & 0x8000);
+        await first.CloseAsync();
+        for (var attempt = 0; attempt < 80 && (GetAsyncKeyState(1) & 0x8000) != 0; attempt++)
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+        Assert.Equal(0, GetAsyncKeyState(1) & 0x8000);
     }
+
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
 
     private sealed class NativeHost : IAsyncDisposable
     {

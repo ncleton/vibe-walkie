@@ -69,6 +69,15 @@ public sealed class NativeDesktopTests
                 await Task.Delay(25, TestContext.Current.CancellationToken);
             Assert.NotEqual(changed.Snapshot.Text, TargetCaptureService.ReadText(changed.Element).Text);
             Assert.Equal(RemoteErrorCode.TargetChanged, Assert.Throws<ProtocolException>(() => input.InsertText("ne pas insérer", changed)).Code);
+            for (var attempt = 0; attempt < 40 && !TargetCaptureService.ReadText(changed.Element).Text.EndsWith("changement"); attempt++)
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+            var beforeKeys = TargetCaptureService.ReadText(changed.Element).Text;
+            Assert.EndsWith("changement", beforeKeys);
+            input.Press(RemoteKey.Backspace, 4);
+            var expectedKeys = beforeKeys[..^4];
+            for (var attempt = 0; attempt < 40 && TargetCaptureService.ReadText(changed.Element).Text != expectedKeys; attempt++)
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+            Assert.Equal(expectedKeys, TargetCaptureService.ReadText(changed.Element).Text);
             capture.Consume(); input.ReleaseInputs();
         }
         finally
@@ -94,5 +103,31 @@ public sealed class NativeDesktopTests
         Assert.True(result.JpegData.Length > 1000); Assert.Equal(0xFF, result.JpegData[0]);
         capture.Stop();
     }
+    [Fact]
+    public async Task ActualCursorPreservesSmallDeltasAndReleasesRemoteDrag()
+    {
+        Assert.True(GetCursorPos(out var original));
+        var input = new InputService();
+        try
+        {
+            input.PointerAbsolute(.5, .5);
+            Assert.True(GetCursorPos(out var center));
+            for (var count = 0; count < 40; count++) input.PointerMove(.25, -.25);
+            Assert.True(GetCursorPos(out var moved));
+            Assert.Equal(center.X + 10, moved.X); Assert.Equal(center.Y - 10, moved.Y);
+            input.Drag(DragPhase.Began, 0, 0);
+            for (var attempt = 0; attempt < 40 && (GetAsyncKeyState(1) & 0x8000) == 0; attempt++)
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+            Assert.NotEqual(0, GetAsyncKeyState(1) & 0x8000);
+            input.ReleaseInputs();
+            for (var attempt = 0; attempt < 40 && (GetAsyncKeyState(1) & 0x8000) != 0; attempt++)
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+            Assert.Equal(0, GetAsyncKeyState(1) & 0x8000);
+        }
+        finally { input.ReleaseInputs(); SetCursorPos(original.X, original.Y); }
+    }
+    [StructLayout(LayoutKind.Sequential)] private struct CursorPoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out CursorPoint point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
 }
