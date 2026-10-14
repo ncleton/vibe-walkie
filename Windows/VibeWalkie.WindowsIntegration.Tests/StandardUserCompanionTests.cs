@@ -34,7 +34,10 @@ public sealed class StandardUserCompanionTests
                 @{ accountIsStandard = $true; completeNativeUiTest = $true } | ConvertTo-Json |
                     Set-Content -LiteralPath (Join-Path $Evidence 'standard-user.json') -Encoding utf8
             } catch {
-                $_.Exception.Message | Set-Content -LiteralPath (Join-Path $Evidence 'failure.txt') -Encoding utf8
+                $Failure = $_.Exception.Message
+                $Stages = Join-Path $Evidence 'ui-startup.log'
+                if (Test-Path -LiteralPath $Stages) { $Failure += "`n" + (Get-Content -Raw -LiteralPath $Stages) }
+                $Failure | Set-Content -LiteralPath (Join-Path $Evidence 'failure.txt') -Encoding utf8
                 exit 1
             }
             """, new UTF8Encoding(true));

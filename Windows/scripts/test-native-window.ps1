@@ -28,7 +28,7 @@ try {
     if ($null -eq $Window) {
         if (Test-Path $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH) { Get-Content $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH }
         Write-Output "UI process session: $($Process.SessionId); test session: $((Get-Process -Id $PID).SessionId)"
-        throw 'The real WinUI window did not become accessible.'
+        throw "The real WinUI window did not become accessible. App session: $($Process.SessionId); verifier session: $((Get-Process -Id $PID).SessionId)."
     }
     $RuntimeStarted = $false
     for ($Attempt = 0; $Attempt -lt 300; $Attempt++) {
