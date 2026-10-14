@@ -127,7 +127,7 @@ public sealed class NativeDesktopTests
             })
             $window.ShowDialog() | Out-Null
             """);
-        using var editor = DesktopEditorProcess.Start(script, writableTestDirectory: true);
+        using var editor = DesktopEditorProcess.StartUnelevatedInteractiveUser(script);
         Stage("actual_wpf_process_created");
         var input = new InputService();
         try
@@ -144,7 +144,7 @@ public sealed class NativeDesktopTests
             var owner = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ProcessIdPropertyId, editor.Id);
             var editable = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ControlTypePropertyId, UIA_ControlTypeIds.UIA_EditControlTypeId);
             var plain = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_IsPasswordPropertyId, false);
-            var fieldCondition = automation.CreateAndCondition(automation.CreateAndCondition(owner, editable), plain);
+            var fieldCondition = automation.CreateAndCondition(editable, plain);
             TargetToken? token = null;
             string? lastError = null;
             for (var attempt = 0; attempt < 100; attempt++)
@@ -153,6 +153,7 @@ public sealed class NativeDesktopTests
                 {
                     Stage("finding_actual_wpf_window");
                     var window = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Children, owner);
+                    Stage(window is null ? "actual_wpf_window_not_found" : "actual_wpf_window_found");
                     Stage("finding_actual_wpf_field");
                     var field = window?.FindFirst(TreeScope.TreeScope_Descendants, fieldCondition);
                     if (field is not null)
@@ -165,6 +166,7 @@ public sealed class NativeDesktopTests
                         await Task.Delay(100, TestContext.Current.CancellationToken);
                         Stage("actual_wpf_selection_established");
                     }
+                    if (field is null) { await Task.Delay(100, TestContext.Current.CancellationToken); continue; }
                     Stage("capturing_actual_wpf_target");
                     token = capture.Capture();
                     if (token.ApplicationIdentifier == editor.Id.ToString()) break;
@@ -189,7 +191,7 @@ public sealed class NativeDesktopTests
 
             var ownWindow = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Children, owner);
             var secure = ownWindow?.FindFirst(TreeScope.TreeScope_Descendants,
-                automation.CreateAndCondition(owner, automation.CreatePropertyCondition(UIA_PropertyIds.UIA_IsPasswordPropertyId, true)));
+                automation.CreatePropertyCondition(UIA_PropertyIds.UIA_IsPasswordPropertyId, true));
             Assert.NotNull(secure);
             secure.SetFocus();
             await Task.Delay(100, TestContext.Current.CancellationToken);

@@ -10,6 +10,64 @@ namespace VibeWalkie.WindowsIntegration.Tests;
 internal static class DesktopEditorProcess
 {
     private static readonly Dictionary<int, List<DesktopAccess>> DesktopLeases = new();
+    // Use Windows' genuine UAC-linked token for the logged-on account. WinUI
+    // activation and WPF accessibility must share the desktop's user context;
+    // running another account inside the runner's session tests RunAs instead.
+    // No fabricated token, impersonation, elevated fallback or UAC change.
+    public static Process StartUnelevatedInteractiveUser(string script)
+    {
+        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
+            throw new InvalidOperationException("The UAC-linked desktop test is restricted to the disposable Windows CI machine.");
+        var shell = Native.GetShellWindow();
+        if (shell == 0) throw new InvalidOperationException("A logged-on interactive Explorer desktop is required.");
+        Native.GetWindowThreadProcessId(shell, out var shellId);
+        var shellProcess = Native.OpenProcess(0x1000, false, shellId);
+        if (shellProcess == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+        try
+        {
+            if (!Native.OpenProcessToken(shellProcess, 0x0008, out var shellToken))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            try
+            {
+                using var shellIdentity = new WindowsIdentity(shellToken);
+                using var callerIdentity = WindowsIdentity.GetCurrent();
+                if (shellIdentity.User != callerIdentity.User)
+                    throw new InvalidOperationException("The test runner and interactive desktop must belong to the same Windows account.");
+            }
+            finally { Native.CloseHandle(shellToken); }
+        }
+        finally { Native.CloseHandle(shellProcess); }
+        using var current = Process.GetCurrentProcess();
+        if (!Native.OpenProcessToken(current.Handle, 0x000A, out var token))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        try
+        {
+            if (!Native.GetTokenPointerInformation(token, 19, out var linked, nint.Size, out _))
+                throw new InvalidOperationException("Windows CI must provide the logged-on user's genuine non-elevated UAC token. No administrator fallback is allowed.");
+            try
+            {
+                if (!Native.GetTokenIntegerInformation(linked, 20, out var elevated, sizeof(int), out _))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                if (elevated != 0) throw new InvalidOperationException("The linked Windows token is elevated; this cannot validate ordinary-user behavior.");
+                if (!Native.DuplicateTokenEx(linked, 0x02000000, 0, 2, 1, out var primary))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                try
+                {
+                    var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+                    var command = new StringBuilder($"\"{executable}\" -NoProfile -STA -ExecutionPolicy Bypass -File \"{script}\"");
+                    var startup = new Native.StartupInfo { Size = Marshal.SizeOf<Native.StartupInfo>(), Desktop = "winsta0\\default" };
+                    if (!Native.CreateProcessWithTokenW(primary, 1, executable, command, 0x10, 0,
+                            Path.GetDirectoryName(script), ref startup, out var child))
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
+                    try { return Process.GetProcessById(child.ProcessId); }
+                    finally { Native.CloseHandle(child.Thread); Native.CloseHandle(child.Process); }
+                }
+                finally { Native.CloseHandle(primary); }
+            }
+            finally { Native.CloseHandle(linked); }
+        }
+        finally { Native.CloseHandle(token); }
+    }
     // Hosted CI runs elevated. Use the actual interactive Explorer user's
     // token so the editor has the same permissions as a normal desktop app.
     // The companion must continue to reject elevated target applications.
@@ -150,6 +208,10 @@ internal static class DesktopEditorProcess
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint window, out uint processId);
         [DllImport("kernel32.dll", SetLastError = true)] public static extern nint OpenProcess(uint access, bool inherit, uint processId);
         [DllImport("advapi32.dll", SetLastError = true)] public static extern bool OpenProcessToken(nint process, uint access, out nint token);
+        [DllImport("advapi32.dll", EntryPoint = "GetTokenInformation", SetLastError = true)]
+        public static extern bool GetTokenPointerInformation(nint token, int informationClass, out nint value, int length, out int required);
+        [DllImport("advapi32.dll", EntryPoint = "GetTokenInformation", SetLastError = true)]
+        public static extern bool GetTokenIntegerInformation(nint token, int informationClass, out int value, int length, out int required);
         [DllImport("advapi32.dll", SetLastError = true)] public static extern bool DuplicateTokenEx(nint token, uint access, nint attributes, int impersonationLevel, int tokenType, out nint primary);
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         public static extern bool CreateProcessWithTokenW(nint token, uint logonFlags, string application,

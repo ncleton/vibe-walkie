@@ -8,10 +8,10 @@ public sealed class StandardUserCompanionTests
 {
     [Fact]
     [Trait("Category", "BundledRuntime")]
-    public async Task FullNativeCompanionWorksUnderARealStandardUser()
+    public async Task FullNativeCompanionWorksUnderTheRealUnelevatedInteractiveUser()
     {
         Assert.Equal("true", Environment.GetEnvironmentVariable("GITHUB_ACTIONS"));
-        Assert.False(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("VIBEWALKIE_TEST_USERNAME")));
+        var desktopUser = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root is not null && !File.Exists(Path.Combine(root.FullName, "Windows", "scripts", "test-native-window.ps1"))) root = root.Parent;
         Assert.NotNull(root);
@@ -28,10 +28,11 @@ public sealed class StandardUserCompanionTests
             $Evidence = {{Ps(evidence)}}
             try {
                 $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+                if ($Identity.User.Value -ne '{{desktopUser}}') { throw 'The actual GUI test must use the logged-on desktop account.' }
                 $Principal = [Security.Principal.WindowsPrincipal]::new($Identity)
                 if ($Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'The actual companion test must run without administrator privileges.' }
                 & {{Ps(verifier)}} -EvidenceDirectory $Evidence
-                @{ accountIsStandard = $true; completeNativeUiTest = $true } | ConvertTo-Json |
+                @{ tokenIsUnelevated = $true; interactiveAccount = $true; completeNativeUiTest = $true } | ConvertTo-Json |
                     Set-Content -LiteralPath (Join-Path $Evidence 'standard-user.json') -Encoding utf8
             } catch {
                 $Failure = $_.Exception.Message
@@ -41,7 +42,7 @@ public sealed class StandardUserCompanionTests
                 exit 1
             }
             """, new UTF8Encoding(true));
-        using var process = DesktopEditorProcess.Start(script, writableTestDirectory: true);
+        using var process = DesktopEditorProcess.StartUnelevatedInteractiveUser(script);
         try
         {
             await process.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromMinutes(3), TestContext.Current.CancellationToken);
@@ -50,7 +51,8 @@ public sealed class StandardUserCompanionTests
             var standard = Path.Combine(evidence, "standard-user.json");
             var native = Path.Combine(evidence, "native-window-evidence.json");
             using var status = JsonDocument.Parse(File.ReadAllText(standard));
-            Assert.True(status.RootElement.GetProperty("accountIsStandard").GetBoolean());
+            Assert.True(status.RootElement.GetProperty("tokenIsUnelevated").GetBoolean());
+            Assert.True(status.RootElement.GetProperty("interactiveAccount").GetBoolean());
             using var ui = JsonDocument.Parse(File.ReadAllText(native));
             foreach (var property in new[] { "runtimeStarted", "configurationPersisted", "unpackagedUpdateError", "cameraSelectionError", "gracefulExit" })
                 Assert.True(ui.RootElement.GetProperty(property).GetBoolean(), property);
