@@ -25,7 +25,7 @@ internal static class DesktopEditorProcess
         if (shellProcess == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
         try
         {
-            if (!Native.OpenProcessToken(shellProcess, 0x0008, out var shellToken))
+            if (!Native.OpenProcessToken(shellProcess, 0x000A, out var shellToken))
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             try
             {
@@ -33,40 +33,33 @@ internal static class DesktopEditorProcess
                 using var callerIdentity = WindowsIdentity.GetCurrent();
                 if (shellIdentity.User != callerIdentity.User)
                     throw new InvalidOperationException("The test runner and interactive desktop must belong to the same Windows account.");
+                if (!Native.GetTokenPointerInformation(shellToken, 19, out var linked, nint.Size, out _))
+                    throw new InvalidOperationException("Windows CI must provide the logged-on user's genuine non-elevated UAC token. No administrator fallback is allowed.");
+                try
+                {
+                    if (!Native.GetTokenIntegerInformation(linked, 20, out var elevated, sizeof(int), out _))
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
+                    if (elevated != 0) throw new InvalidOperationException("The linked Windows token is elevated; this cannot validate ordinary-user behavior.");
+                    if (!Native.DuplicateTokenEx(linked, 0x02000000, 0, 2, 1, out var primary))
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
+                    try
+                    {
+                        var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+                        var command = new StringBuilder($"\"{executable}\" -NoProfile -STA -ExecutionPolicy Bypass -File \"{script}\"");
+                        var startup = new Native.StartupInfo { Size = Marshal.SizeOf<Native.StartupInfo>(), Desktop = "winsta0\\default" };
+                        if (!Native.CreateProcessWithTokenW(primary, 1, executable, command, 0x10, 0,
+                                Path.GetDirectoryName(script), ref startup, out var child))
+                            throw new Win32Exception(Marshal.GetLastWin32Error());
+                        try { return Process.GetProcessById(child.ProcessId); }
+                        finally { Native.CloseHandle(child.Thread); Native.CloseHandle(child.Process); }
+                    }
+                    finally { Native.CloseHandle(primary); }
+                }
+                finally { Native.CloseHandle(linked); }
             }
             finally { Native.CloseHandle(shellToken); }
         }
         finally { Native.CloseHandle(shellProcess); }
-        using var current = Process.GetCurrentProcess();
-        if (!Native.OpenProcessToken(current.Handle, 0x000A, out var token))
-            throw new Win32Exception(Marshal.GetLastWin32Error());
-        try
-        {
-            if (!Native.GetTokenPointerInformation(token, 19, out var linked, nint.Size, out _))
-                throw new InvalidOperationException("Windows CI must provide the logged-on user's genuine non-elevated UAC token. No administrator fallback is allowed.");
-            try
-            {
-                if (!Native.GetTokenIntegerInformation(linked, 20, out var elevated, sizeof(int), out _))
-                    throw new Win32Exception(Marshal.GetLastWin32Error());
-                if (elevated != 0) throw new InvalidOperationException("The linked Windows token is elevated; this cannot validate ordinary-user behavior.");
-                if (!Native.DuplicateTokenEx(linked, 0x02000000, 0, 2, 1, out var primary))
-                    throw new Win32Exception(Marshal.GetLastWin32Error());
-                try
-                {
-                    var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
-                    var command = new StringBuilder($"\"{executable}\" -NoProfile -STA -ExecutionPolicy Bypass -File \"{script}\"");
-                    var startup = new Native.StartupInfo { Size = Marshal.SizeOf<Native.StartupInfo>(), Desktop = "winsta0\\default" };
-                    if (!Native.CreateProcessWithTokenW(primary, 1, executable, command, 0x10, 0,
-                            Path.GetDirectoryName(script), ref startup, out var child))
-                        throw new Win32Exception(Marshal.GetLastWin32Error());
-                    try { return Process.GetProcessById(child.ProcessId); }
-                    finally { Native.CloseHandle(child.Thread); Native.CloseHandle(child.Process); }
-                }
-                finally { Native.CloseHandle(primary); }
-            }
-            finally { Native.CloseHandle(linked); }
-        }
-        finally { Native.CloseHandle(token); }
     }
     // Hosted CI runs elevated. Use the actual interactive Explorer user's
     // token so the editor has the same permissions as a normal desktop app.

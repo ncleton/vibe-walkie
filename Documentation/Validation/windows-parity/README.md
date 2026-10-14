@@ -113,6 +113,46 @@ ainsi que le hash du MSIX et les preuves UI. `artifact-audit-e7.json` conserve
 ces résultats et le commit de fusion CI `6ea06f4b2b64b85b3119953c64e02594aaa8ab39`.
 La preuve d’installation et de mise à jour de confiance reste absente.
 
+## Vérifications complémentaires en cours
+
+L’[exécution 38492721494](https://github.com/ncleton/vibe-walkie/actions/runs/38492721494)
+a réussi 68 tests Windows (14 protocole, 11 cœur, 7 natifs, 36 posture), sans
+aucun ignoré. Elle ajoute la mesure du vrai pointeur avec de petits déplacements,
+la répétition de touches et le relâchement du glisser à la fermeture TLS.
+L’ensemble de cette exécution est cependant **en échec** : le parcours du
+compagnon WinUI sous le compte standard temporaire ne présente pas sa fenêtre.
+Le processus charge .NET et WinUI dans la même session que le vérificateur.
+L’exécution 38495188104 précise que `Application.Start` renvoie
+`COMException 0x8000FFFF`, avant le constructeur du compagnon. Le parcours réussi de l’interface cité plus haut
+utilise le compte élevé du runner CI.
+
+Un nouvel essai avec de vrais champs WPF et de mot de passe a également bloqué
+la CI. Les appels du client de test sont désormais bornés et l’exécution est
+arrêtée explicitement après son délai, sans export de mémoire. Les étapes fixes
+du rendu et de la capture permettent de distinguer le lancement du champ,
+sa découverte et la saisie. Aucun de ces deux parcours n’est annoncé comme
+validé tant que leurs essais ne passent pas.
+
+Le lancement précédent utilisait un autre compte dans la session du runner,
+ce qui exerce « Exécuter en tant qu’un autre utilisateur ». Ce contexte diffère
+d’une session normale ; Microsoft documente un problème apparenté dans
+[Windows App SDK 2555](https://github.com/microsoft/WindowsAppSDK/issues/2555),
+sans que cela prouve la cause exacte de notre exécutable autonome.
+Le test actuel demande le véritable jeton UAC non élevé de l’Explorateur
+connecté, vérifie l’identité de session et les droits puis lance le compagnon
+avec ce jeton. Il échoue si ce jeton manque ; aucun jeton artificiel, changement
+UAC ou repli administrateur n’est prévu. Son résultat reste à confirmer. Cela
+ne remplace pas la validation sur un compte standard Windows 11 réel.
+
+Les diagnostics du démarrage initial WinUI ont été étendus avant le constructeur
+de l’application. Le manifeste corrige aussi l’identifiant de compatibilité
+Windows et déclare la mise à l’échelle par écran, conformément au
+[format documenté par Microsoft](https://learn.microsoft.com/en-us/windows/win32/sbscs/application-manifests).
+Le rendu sur plusieurs écrans et leur mise à l’échelle reste à vérifier.
+La CI continue à recueillir les autres diagnostics après un échec de l’essai
+natif, mais un contrôle obligatoire refuse sa réussite et toute livraison si
+ces essais échouent ou sont ignorés.
+
 ## Blocages de livraison
 
 - Aucun accès à une machine Windows 11 avec webcam n’est actuellement fourni
