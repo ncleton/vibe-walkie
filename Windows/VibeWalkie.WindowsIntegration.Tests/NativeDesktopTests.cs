@@ -31,7 +31,7 @@ public sealed class NativeDesktopTests
         try
         {
             var capture = new TargetCaptureService(); var input = new InputService(); TargetToken? token = null;
-            var automation = new CUIAutomation8();
+            var automation = new CUIAutomation8 { ConnectionTimeout = 1000, TransactionTimeout = 2000 };
             var editorCondition = automation.CreateAndCondition(
                 automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ProcessIdPropertyId, editor.Id),
                 automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ControlTypePropertyId, UIA_ControlTypeIds.UIA_EditControlTypeId));
@@ -117,7 +117,7 @@ public sealed class NativeDesktopTests
         var input = new InputService();
         try
         {
-            var automation = new CUIAutomation8();
+            var automation = new CUIAutomation8 { ConnectionTimeout = 1000, TransactionTimeout = 2000 };
             var capture = new TargetCaptureService();
             var owner = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ProcessIdPropertyId, editor.Id);
             var editable = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ControlTypePropertyId, UIA_ControlTypeIds.UIA_EditControlTypeId);
