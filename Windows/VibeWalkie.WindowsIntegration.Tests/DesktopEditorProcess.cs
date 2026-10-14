@@ -33,14 +33,27 @@ internal static class DesktopEditorProcess
                 using var callerIdentity = WindowsIdentity.GetCurrent();
                 if (shellIdentity.User != callerIdentity.User)
                     throw new InvalidOperationException("The test runner and interactive desktop must belong to the same Windows account.");
-                if (!Native.GetTokenPointerInformation(shellToken, 19, out var linked, nint.Size, out _))
-                    throw new InvalidOperationException("Windows CI must provide the logged-on user's genuine non-elevated UAC token. No administrator fallback is allowed.");
+                if (!Native.GetTokenIntegerInformation(shellToken, 20, out var shellElevated, sizeof(int), out _))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                nint linked = 0;
+                var ordinary = shellToken;
+                if (shellElevated != 0)
+                {
+                    if (!Native.GetTokenPointerInformation(shellToken, 19, out linked, nint.Size, out _))
+                    {
+                        var error = Marshal.GetLastWin32Error();
+                        if (!Native.GetTokenIntegerInformation(shellToken, 18, out var elevationType, sizeof(int), out _))
+                            throw new Win32Exception(Marshal.GetLastWin32Error());
+                        throw new InvalidOperationException($"The elevated Explorer has no accessible genuine non-elevated UAC token (Win32 {error}, elevation type {elevationType}). A normal interactive Windows session is required; no administrator fallback is allowed.");
+                    }
+                    ordinary = linked;
+                }
                 try
                 {
-                    if (!Native.GetTokenIntegerInformation(linked, 20, out var elevated, sizeof(int), out _))
+                    if (!Native.GetTokenIntegerInformation(ordinary, 20, out var elevated, sizeof(int), out _))
                         throw new Win32Exception(Marshal.GetLastWin32Error());
                     if (elevated != 0) throw new InvalidOperationException("The linked Windows token is elevated; this cannot validate ordinary-user behavior.");
-                    if (!Native.DuplicateTokenEx(linked, 0x02000000, 0, 2, 1, out var primary))
+                    if (!Native.DuplicateTokenEx(ordinary, 0x02000000, 0, 2, 1, out var primary))
                         throw new Win32Exception(Marshal.GetLastWin32Error());
                     try
                     {
@@ -55,7 +68,7 @@ internal static class DesktopEditorProcess
                     }
                     finally { Native.CloseHandle(primary); }
                 }
-                finally { Native.CloseHandle(linked); }
+                finally { if (linked != 0) Native.CloseHandle(linked); }
             }
             finally { Native.CloseHandle(shellToken); }
         }
