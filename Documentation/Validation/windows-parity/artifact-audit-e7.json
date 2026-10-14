@@ -1,0 +1,29 @@
+{
+  "commit": "6ea06f4b2b64b85b3119953c64e02594aaa8ab39",
+  "downloadedZipSha256": "c74404e7fd6dce5aa8671b6302a7233aa771c22a50014986ced703d21c303968",
+  "verifiedNativeFiles": 1993,
+  "nativeUiChecks": {
+    "title": "Vibe Walkie",
+    "nativeWindow": true,
+    "requiredControls": true,
+    "unpackagedUpdateError": true,
+    "cameraSelectionError": true,
+    "configurationPersisted": true,
+    "runtimeStarted": true,
+    "gracefulExit": true
+  },
+  "swiftRuntimeDlls": 18,
+  "msix": {
+    "version": "1.0.76.0",
+    "comparedFiles": 1994,
+    "sdkValidation": true,
+    "commit": "6ea06f4b2b64b85b3119953c64e02594aaa8ab39",
+    "signed": false,
+    "installed": false,
+    "sha256": "2bf885a3ade22f6da453d200c5bf84158a258dd228223efbee2b305a41797686",
+    "purpose": "validation"
+  },
+  "pullRequestHead": "e7c9690a9a32b8f87ffbff42bb026f19ad740fac",
+  "workflowRun": 38487969045,
+  "artifactId": 11861235513
+}

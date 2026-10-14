@@ -69,6 +69,50 @@ archive ZIP SHA-256 :
 Il n’est pas annoncé comme un installateur de production. Les modifications
 ultérieures de ce rapport n’altèrent pas cette révision du code vérifié.
 
+## Vérification étendue du 14 octobre
+
+[Exécution réussie 38487969045](https://github.com/ncleton/vibe-walkie/actions/runs/38487969045),
+révision `e7c9690a9a32b8f87ffbff42bb026f19ad740fac` : **67 tests Windows**
+(14 protocole, 11 cœur, 6 natifs, 36 posture) et 61 tests partagés sur Mac,
+aucun ignoré.
+
+Les nouveaux essais natifs utilisent de véritables connexions TLS 1.3, le
+certificat de transport CNG du compagnon et le registre DPAPI. Ils vérifient
+l’approbation locale, les signatures invalides, les clients non appairés, la
+révocation, la reconnexion et les reprises de commande sans double exécution,
+le contrôleur unique, les mauvaises séquences/sessions et les trames trop grandes.
+Ce client protocolaire de test ne remplace pas un iPhone ni un essai LAN/Tailscale.
+
+La véritable fenêtre WinUI modifie une commande des sept zones, l’applique et
+sa sauvegarde DPAPI est relue. Elle affiche les erreurs attendues en absence
+d’installation MSIX et de sélection caméra, puis quitte normalement.
+L’erreur d’identité de paquet est maintenant traduite en instruction explicite
+pour installer le paquet signé ; une bascule de démarrage refusée est rétablie.
+
+La validation par le SDK Windows a corrigé deux défauts qui étaient invisibles
+à la compilation de l’exécutable : l’espace de noms du démarrage automatique
+et l’ordre des permissions. Le MSIX non signé est créé et extrait par MakeAppx,
+sans désactiver sa validation et sans installation, signature artificielle ou
+publication. **1 994 fichiers** sont comparés après extraction. La préparation
+réutilisée par la livraison signée impose la version de l’exécutable et retire
+les fichiers de diagnostic propres à la CI.
+
+L’audit de l’archive précédente a vérifié 2 116 empreintes de fichiers et analysé
+547 binaires PE. Le bundle de posture contient désormais les **18 DLL réellement
+requises** par son exécutable, dont les bibliothèques VC, et exclut 124 DLL
+inutiles d’outils de développement. Son exécution est retestée sans les outils
+sur PATH, avec lecture JSON et erreur explicite sur une entrée invalide.
+Ces entrées de protocole ne constituent pas des observations de webcam.
+
+[Artefact de cette révision](https://github.com/ncleton/vibe-walkie/actions/runs/38487969045/artifacts/11861235513),
+ZIP SHA-256 retéléchargé et vérifié sur le Mac mini de Nicolas :
+`c74404e7fd6dce5aa8671b6302a7233aa771c22a50014986ced703d21c303968`.
+Il contient le bundle et le MSIX **non signés de validation** dans leurs dossiers
+respectifs. Les 1 993 fichiers du bundle ont été vérifiés après retéléchargement,
+ainsi que le hash du MSIX et les preuves UI. `artifact-audit-e7.json` conserve
+ces résultats et le commit de fusion CI `6ea06f4b2b64b85b3119953c64e02594aaa8ab39`.
+La preuve d’installation et de mise à jour de confiance reste absente.
+
 ## Blocages de livraison
 
 - Aucun accès à une machine Windows 11 avec webcam n’est actuellement fourni
