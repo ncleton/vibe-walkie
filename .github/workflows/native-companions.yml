@@ -37,7 +37,14 @@ jobs:
       - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
       - run: dotnet build Windows/VibeWalkie.WindowsCore/VibeWalkie.WindowsCore.csproj -c Release
       - run: ./Windows/scripts/create-ci-desktop-user.ps1
-      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release --filter 'Category!=BundledRuntime' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
+      - id: desktop-tests
+        continue-on-error: true
+        run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release --filter 'Category!=BundledRuntime' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
+      - name: Read fixed desktop-test stages
+        if: always()
+        run: |
+          $Stages = Join-Path $env:RUNNER_TEMP 'native-wpf-progress.log'
+          if (Test-Path -LiteralPath $Stages) { Get-Content -LiteralPath $Stages }
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
           swift-version: '6.4.0'
@@ -46,6 +53,9 @@ jobs:
       - run: ./Windows/scripts/test-native-window.ps1
         shell: powershell
       - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release --filter 'Category=BundledRuntime' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 3m --blame-hang-dump-type none
+      - name: Require successful native desktop tests
+        if: always() && steps.desktop-tests.outcome != 'success'
+        run: throw 'Real native desktop tests failed or were skipped. Windows validation and release are blocked.'
       - run: ./Windows/scripts/test-package.ps1
       - name: Remove the disposable standard test account
         if: always() && env.VIBEWALKIE_TEST_USERNAME != ''

@@ -97,7 +97,18 @@ public sealed class NativeDesktopTests
         var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var script = Path.Combine(directory, "editor.ps1");
+        var ready = Path.Combine(directory, "ready.txt");
+        void Stage(string value)
+        {
+            var path = Path.Combine(Environment.GetEnvironmentVariable("RUNNER_TEMP") ?? directory, "native-wpf-progress.log");
+            File.AppendAllText(path, value + Environment.NewLine);
+        }
+        Stage("creating_actual_wpf_editor");
         File.WriteAllText(script, """
+            $ErrorActionPreference = 'Stop'
+            $ReadyPath = Join-Path $PSScriptRoot 'ready.txt'
+            $FailurePath = Join-Path $PSScriptRoot 'wpf-failure.txt'
+            trap { ('wpf_startup_error_' + $_.Exception.GetType().Name + '_' + $_.Exception.HResult.ToString('X8')) | Set-Content -LiteralPath $FailurePath; exit 1 }
             Add-Type -AssemblyName PresentationFramework
             $window = New-Object System.Windows.Window
             $window.Title = 'Vibe Walkie WPF integration editor'
@@ -110,14 +121,25 @@ public sealed class NativeDesktopTests
             $panel.Children.Add($text) | Out-Null
             $panel.Children.Add($password) | Out-Null
             $window.Content = $panel
-            $window.Add_ContentRendered({ $window.Activate(); $text.Focus() | Out-Null })
+            $window.Add_ContentRendered({
+                $window.Activate(); $text.Focus() | Out-Null
+                [IO.File]::WriteAllText($ReadyPath, 'rendered')
+            })
             $window.ShowDialog() | Out-Null
             """);
-        using var editor = DesktopEditorProcess.Start(script);
+        using var editor = DesktopEditorProcess.Start(script, writableTestDirectory: true);
+        Stage("actual_wpf_process_created");
         var input = new InputService();
         try
         {
+            for (var attempt = 0; attempt < 100 && !File.Exists(ready) && !editor.HasExited; attempt++)
+                await Task.Delay(100, TestContext.Current.CancellationToken);
+            var startupFailure = Path.Combine(directory, "wpf-failure.txt");
+            Assert.True(File.Exists(ready), $"The real WPF editor did not render. Process exited: {editor.HasExited}. " +
+                (File.Exists(startupFailure) ? File.ReadAllText(startupFailure) : "No startup error was reported."));
+            Stage("actual_wpf_content_rendered");
             var automation = new CUIAutomation8 { ConnectionTimeout = 1000, TransactionTimeout = 2000 };
+            Stage("uia_client_created");
             var capture = new TargetCaptureService();
             var owner = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ProcessIdPropertyId, editor.Id);
             var editable = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ControlTypePropertyId, UIA_ControlTypeIds.UIA_EditControlTypeId);
@@ -129,7 +151,10 @@ public sealed class NativeDesktopTests
             {
                 try
                 {
-                    var field = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Subtree, fieldCondition);
+                    Stage("finding_actual_wpf_window");
+                    var window = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Children, owner);
+                    Stage("finding_actual_wpf_field");
+                    var field = window?.FindFirst(TreeScope.TreeScope_Descendants, fieldCondition);
                     if (field is not null)
                     {
                         var bounds = field.CurrentBoundingRectangle;
@@ -138,7 +163,9 @@ public sealed class NativeDesktopTests
                         await Task.Delay(100, TestContext.Current.CancellationToken);
                         input.Press(RemoteKey.SelectAll);
                         await Task.Delay(100, TestContext.Current.CancellationToken);
+                        Stage("actual_wpf_selection_established");
                     }
+                    Stage("capturing_actual_wpf_target");
                     token = capture.Capture();
                     if (token.ApplicationIdentifier == editor.Id.ToString()) break;
                     token = null;
@@ -147,22 +174,27 @@ public sealed class NativeDesktopTests
                 await Task.Delay(100, TestContext.Current.CancellationToken);
             }
             Assert.True(token is not null, $"The real WPF editor was not captured: {lastError}.");
+            Stage("actual_wpf_target_captured");
             var target = capture.Resolve(token.Token);
+            Stage("actual_wpf_target_resolved");
             Assert.IsAssignableFrom<IUIAutomationTextPattern>(target.Element.GetCurrentPattern(UIA_PatternIds.UIA_TextPatternId));
             Assert.Equal(0, target.Snapshot.Start);
             Assert.Equal(target.Snapshot.Text.Length, target.Snapshot.End);
             const string replacement = "Dictée été 🌍\nDeuxième ligne";
             Assert.True(input.InsertText(replacement, target).Verified);
+            Stage("actual_wpf_insertion_verified");
             Assert.Equal(replacement, TextSelectionSnapshot.Normalize(TargetCaptureService.ReadText(target.Element).Text));
             capture.Consume();
             Assert.Equal(RemoteErrorCode.TargetLost, Assert.Throws<ProtocolException>(() => capture.Resolve(token.Token)).Code);
 
-            var secure = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Subtree,
+            var ownWindow = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Children, owner);
+            var secure = ownWindow?.FindFirst(TreeScope.TreeScope_Descendants,
                 automation.CreateAndCondition(owner, automation.CreatePropertyCondition(UIA_PropertyIds.UIA_IsPasswordPropertyId, true)));
             Assert.NotNull(secure);
             secure.SetFocus();
             await Task.Delay(100, TestContext.Current.CancellationToken);
             Assert.Equal(RemoteErrorCode.SecureTarget, Assert.Throws<ProtocolException>(() => capture.Capture()).Code);
+            Stage("actual_wpf_password_rejected");
         }
         finally
         {
