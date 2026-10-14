@@ -1,10 +1,13 @@
-﻿$ErrorActionPreference = 'Stop'
+﻿param([string]$EvidenceDirectory = '')
+$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $Executable = Join-Path $Root 'build/windows-native-validation/VibeWalkie.Companion.exe'
-$env:VIBEWALKIE_UI_DIAGNOSTIC_PATH = Join-Path $env:RUNNER_TEMP 'vibewalkie-ui-startup.log'
+if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) { $EvidenceDirectory = Join-Path $Root 'build/windows-native-validation' }
+if (-not (Test-Path -LiteralPath $EvidenceDirectory)) { New-Item -ItemType Directory -Path $EvidenceDirectory | Out-Null }
+$env:VIBEWALKIE_UI_DIAGNOSTIC_PATH = Join-Path $EvidenceDirectory 'ui-startup.log'
 if (Test-Path $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH) { Remove-Item -LiteralPath $env:VIBEWALKIE_UI_DIAGNOSTIC_PATH }
 $Process = Start-Process -FilePath $Executable -PassThru
 try {
@@ -103,7 +106,7 @@ try {
     # Only UI control names are exported. Never export the generated pairing QR,
     # confirmation secret, TLS identity, screenshots or the user's camera.
     @{ nativeWindow = $true; title = $WindowTitle; requiredControls = $true; runtimeStarted = $true; gracefulExit = $true; configurationPersisted = $true; unpackagedUpdateError = $true; cameraSelectionError = $true } |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'build/windows-native-validation/native-window-evidence.json') -Encoding utf8
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'native-window-evidence.json') -Encoding utf8
 } finally {
     if (-not $Process.HasExited) { Stop-Process -Id $Process.Id -Force }
 }

@@ -13,10 +13,10 @@ internal static class DesktopEditorProcess
     // Hosted CI runs elevated. Use the actual interactive Explorer user's
     // token so the editor has the same permissions as a normal desktop app.
     // The companion must continue to reject elevated target applications.
-    public static Process Start(string script)
+    public static Process Start(string script, bool writableTestDirectory = false)
     {
         var username = Environment.GetEnvironmentVariable("VIBEWALKIE_TEST_USERNAME");
-        if (username is not null) return StartStandardUser(script, username);
+        if (username is not null) return StartStandardUser(script, username, writableTestDirectory);
         var shell = Native.GetShellWindow();
         if (shell == 0) throw new InvalidOperationException("The integration test requires a real interactive Explorer desktop.");
         Native.GetWindowThreadProcessId(shell, out var shellId);
@@ -52,7 +52,7 @@ internal static class DesktopEditorProcess
         finally { Native.CloseHandle(process); }
     }
 
-    private static Process StartStandardUser(string script, string username)
+    private static Process StartStandardUser(string script, string username, bool writableTestDirectory)
     {
         if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
             throw new InvalidOperationException("The separate desktop test account is restricted to the disposable GitHub Actions machine.");
@@ -60,7 +60,8 @@ internal static class DesktopEditorProcess
             ?? throw new InvalidOperationException("The CI standard-user credentials are not configured.");
         var directory = Path.GetDirectoryName(script)!;
         var access = new ProcessStartInfo("icacls.exe") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var argument in new[] { directory, "/grant", $"{Environment.MachineName}\\{username}:(OI)(CI)RX" }) access.ArgumentList.Add(argument);
+        var permission = writableTestDirectory ? "M" : "RX";
+        foreach (var argument in new[] { directory, "/grant", $"{Environment.MachineName}\\{username}:(OI)(CI){permission}" }) access.ArgumentList.Add(argument);
         using (var acl = Process.Start(access) ?? throw new InvalidOperationException("Cannot grant read access to the integration editor."))
         {
             if (!acl.WaitForExit(5000) || acl.ExitCode != 0) throw new InvalidOperationException("The real standard user cannot read the integration editor script.");

@@ -37,7 +37,7 @@ jobs:
       - run: dotnet test Windows/VibeWalkie.WindowsCore.Tests/VibeWalkie.WindowsCore.Tests.csproj -c Release
       - run: dotnet build Windows/VibeWalkie.WindowsCore/VibeWalkie.WindowsCore.csproj -c Release
       - run: ./Windows/scripts/create-ci-desktop-user.ps1
-      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release
+      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release --filter 'Category!=BundledRuntime'
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
           swift-version: '6.4.0'
@@ -45,6 +45,7 @@ jobs:
       - run: ./Windows/scripts/build-validation.ps1
       - run: ./Windows/scripts/test-native-window.ps1
         shell: powershell
+      - run: dotnet test Windows/VibeWalkie.WindowsIntegration.Tests/VibeWalkie.WindowsIntegration.Tests.csproj -c Release --filter 'Category=BundledRuntime'
       - run: ./Windows/scripts/test-package.ps1
       - name: Remove the disposable standard test account
         if: always() && env.VIBEWALKIE_TEST_USERNAME != ''

@@ -27,7 +27,7 @@ if (Get-ChildItem $Bundle -Recurse -File | Where-Object { $_.Extension -in '.pfx
 }
 if (Test-Path -LiteralPath $Stage) { Remove-Item -LiteralPath $Stage -Recurse -Force }
 New-Item -ItemType Directory -Path $Stage | Out-Null
-Get-ChildItem $Bundle | Where-Object { $_.Name -notin @('validation-manifest.json', 'native-window-evidence.json', 'msix-validation-evidence.json', 'AppxManifest.xml') } |
+Get-ChildItem $Bundle | Where-Object { $_.Name -notin @('validation-manifest.json', 'ui-startup.log', 'native-window-evidence.json', 'standard-user-native-evidence.json', 'standard-user-account-evidence.json', 'msix-validation-evidence.json', 'AppxManifest.xml') } |
     Copy-Item -Destination $Stage -Recurse -Force
 [xml]$Manifest = Get-Content -Raw -Encoding utf8 (Join-Path $Root 'Windows/VibeWalkie.Companion/Package.appxmanifest')
 $Manifest.Package.Identity.Version = "$Version.0"
