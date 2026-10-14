@@ -153,6 +153,33 @@ La CI continue à recueillir les autres diagnostics après un échec de l’essa
 natif, mais un contrôle obligatoire refuse sa réussite et toute livraison si
 ces essais échouent ou sont ignorés.
 
+## Dernier résultat de CI
+
+L’[exécution 38497057049](https://github.com/ncleton/vibe-walkie/actions/runs/38497057049),
+révision `5339ac3a4ea440355d25538f346384b8ab927d87`, termine **en échec**.
+Les 61 tests partagés Windows et 7 essais natifs réussissent, sans aucun ignoré.
+La compilation WinUI, le lancement et le parcours complet de l’interface dans
+le compte du runner réussissent aussi. Les workers embarqués sont exécutés.
+
+Les deux essais supplémentaires WPF et WinUI ne peuvent pas démarrer leur
+parcours sans privilèges administrateur : l’Explorateur du runner ne fournit
+pas le jeton UAC non élevé requis. Le test échoue explicitement sur cette
+condition, avant de lancer un processus élevé en substitution. Il faut fournir
+une véritable session interactive Windows avec les droits ordinaires pour
+achever ces validations ; une relance identique de cette CI ne lève pas ce
+blocage. Le contrôle final de tests natifs échoue également, et le paquet signé
+n’est ni construit ni publié.
+
+L’[artefact de cette révision](https://github.com/ncleton/vibe-walkie/actions/runs/38497057049/artifacts/11863942643)
+a été retéléchargé sur le Mac mini de Nicolas. Son SHA-256 est
+`00070915459f90ed96a8fe79c9a7f4a7ce6a37d50d997c4ff396e04d2536d400`.
+Les 1 993 empreintes de fichiers, les preuves du parcours WinUI et le manifeste
+PE contenant les bonnes déclarations Windows et PerMonitorV2 sont vérifiés.
+Le commit de fusion CI `cda836fa5cc745b86d5b22c8ce6a4bfa0513fe70` et la tête
+ci-dessus ont le même arbre Git `7dd4eb0a72f203eef9e0aa3df76d5bc346c01b84`.
+`artifact-audit-5339.json` conserve cet audit avec l’échec de CI et
+`ordinaryUserValidated: false` ; aucune preuve manquante n’est supposée.
+
 ## Blocages de livraison
 
 - Aucun accès à une machine Windows 11 avec webcam n’est actuellement fourni
