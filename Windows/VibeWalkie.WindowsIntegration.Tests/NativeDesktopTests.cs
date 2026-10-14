@@ -92,6 +92,91 @@ public sealed class NativeDesktopTests
         }
     }
     [Fact]
+    public async Task RealWpfEditorVerifiesReplacementAndRejectsPasswordFields()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var script = Path.Combine(directory, "editor.ps1");
+        File.WriteAllText(script, """
+            Add-Type -AssemblyName PresentationFramework
+            $window = New-Object System.Windows.Window
+            $window.Title = 'Vibe Walkie WPF integration editor'
+            $window.Width = 640; $window.Height = 480
+            $panel = New-Object System.Windows.Controls.StackPanel
+            $text = New-Object System.Windows.Controls.TextBox
+            $text.Text = 'Initial WPF text'; $text.AcceptsReturn = $true; $text.Height = 300
+            $password = New-Object System.Windows.Controls.PasswordBox
+            $password.Height = 40
+            $panel.Children.Add($text) | Out-Null
+            $panel.Children.Add($password) | Out-Null
+            $window.Content = $panel
+            $window.Add_ContentRendered({ $window.Activate(); $text.Focus() | Out-Null })
+            $window.ShowDialog() | Out-Null
+            """);
+        using var editor = DesktopEditorProcess.Start(script);
+        var input = new InputService();
+        try
+        {
+            var automation = new CUIAutomation8();
+            var capture = new TargetCaptureService();
+            var owner = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ProcessIdPropertyId, editor.Id);
+            var editable = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_ControlTypePropertyId, UIA_ControlTypeIds.UIA_EditControlTypeId);
+            var plain = automation.CreatePropertyCondition(UIA_PropertyIds.UIA_IsPasswordPropertyId, false);
+            var fieldCondition = automation.CreateAndCondition(automation.CreateAndCondition(owner, editable), plain);
+            TargetToken? token = null;
+            string? lastError = null;
+            for (var attempt = 0; attempt < 100; attempt++)
+            {
+                try
+                {
+                    var field = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Subtree, fieldCondition);
+                    if (field is not null)
+                    {
+                        var bounds = field.CurrentBoundingRectangle;
+                        Assert.True(SetCursorPos((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2));
+                        input.Click(PointerButton.Left, 1);
+                        await Task.Delay(100, TestContext.Current.CancellationToken);
+                        input.Press(RemoteKey.SelectAll);
+                        await Task.Delay(100, TestContext.Current.CancellationToken);
+                    }
+                    token = capture.Capture();
+                    if (token.ApplicationIdentifier == editor.Id.ToString()) break;
+                    token = null;
+                }
+                catch (ProtocolException error) { lastError = error.Code.ToString(); }
+                await Task.Delay(100, TestContext.Current.CancellationToken);
+            }
+            Assert.True(token is not null, $"The real WPF editor was not captured: {lastError}.");
+            var target = capture.Resolve(token.Token);
+            Assert.IsAssignableFrom<IUIAutomationTextPattern>(target.Element.GetCurrentPattern(UIA_PatternIds.UIA_TextPatternId));
+            Assert.Equal(0, target.Snapshot.Start);
+            Assert.Equal(target.Snapshot.Text.Length, target.Snapshot.End);
+            const string replacement = "Dictée été 🌍\nDeuxième ligne";
+            Assert.True(input.InsertText(replacement, target).Verified);
+            Assert.Equal(replacement, TextSelectionSnapshot.Normalize(TargetCaptureService.ReadText(target.Element).Text));
+            capture.Consume();
+            Assert.Equal(RemoteErrorCode.TargetLost, Assert.Throws<ProtocolException>(() => capture.Resolve(token.Token)).Code);
+
+            var secure = automation.GetRootElement().FindFirst(TreeScope.TreeScope_Subtree,
+                automation.CreateAndCondition(owner, automation.CreatePropertyCondition(UIA_PropertyIds.UIA_IsPasswordPropertyId, true)));
+            Assert.NotNull(secure);
+            secure.SetFocus();
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+            Assert.Equal(RemoteErrorCode.SecureTarget, Assert.Throws<ProtocolException>(() => capture.Capture()).Code);
+        }
+        finally
+        {
+            input.ReleaseInputs();
+            if (!editor.HasExited)
+            {
+                editor.Kill(entireProcessTree: true);
+                if (!editor.WaitForExit(5000)) throw new TimeoutException("The WPF integration editor did not terminate during cleanup.");
+            }
+            DesktopEditorProcess.RestoreDesktopAccess(editor.Id);
+            Directory.Delete(directory, true);
+        }
+    }
+    [Fact]
     public async Task NativeDxgiCaptureProducesRealBoundedJpegAndReportsFailure()
     {
         await using var capture = new ScreenCaptureService();
