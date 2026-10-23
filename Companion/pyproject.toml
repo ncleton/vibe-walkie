@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 license = "MPL-2.0"
 dependencies = [
   "cryptography==50.0.1",
-  "Pillow==12.3.0",
+  "Pillow==13.0.0",
   "mss==10.2.0",
   "zeroconf==0.151.3",
   "qrcode==8.2",
